@@ -40,3 +40,9 @@ The process of deriving the effective logger level from `LOG_LEVEL`, `NODE_ENV`,
 or the package default. Resolution returns metadata about the chosen source and
 invalid configured values without emitting log records as a side effect.
 _Avoid_: startup warning, environment parsing side effect
+
+**Default Redaction Backstop**:
+The pino redaction paths applied by the Forge Logging Package to catch common
+secret-shaped fields. This is a secondary defense, not a complete model of
+Forge or Atlassian payload safety.
+_Avoid_: complete redaction policy, primary payload safety mechanism

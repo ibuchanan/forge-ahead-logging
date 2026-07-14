@@ -86,11 +86,9 @@ export interface ResolvedForgeLogLevel {
 
 export interface ForgeLoggerOptions {
   name?: string;
-  level?: ForgeLogLevel;
-  environment?: "development" | "staging" | "production" | string;
+  env?: Record<string, string | undefined>;
   redact?: pino.LoggerOptions["redact"];
   base?: pino.LoggerOptions["base"];
-  bindings?: Record<string, unknown>;
 }
 
 export function createForgeLogger(options?: ForgeLoggerOptions): ForgeLogger;
@@ -99,9 +97,11 @@ export function resolveLogLevel(env?: Record<string, string | undefined>): Resol
 ```
 
 `createForgeLogger()` returns a pino-backed logger with Forge-safe defaults.
-`resolveLogLevel()` reads `LOG_LEVEL` from the supplied environment object or
-`process.env` and returns resolution metadata. `getLogLevel()` is a convenience
-wrapper that returns only `resolveLogLevel(...).level`.
+It resolves its level from `options.env` when supplied, otherwise from
+`process.env`. `resolveLogLevel()` reads `LOG_LEVEL` from the supplied
+environment object or `process.env` and returns resolution metadata.
+`getLogLevel()` is a convenience wrapper that returns only
+`resolveLogLevel(...).level`.
 
 Log level resolution order is:
 
@@ -112,6 +112,10 @@ Log level resolution order is:
 Allowed `LOG_LEVEL` values are the `ForgeLogLevel` union. Invalid values must
 fall back to `info` with `source: "default"` and `invalidValue` set. Logger
 construction should not emit a warning record as a side effect.
+
+`ForgeLoggerOptions` must not include a direct `level` override. Runtime
+verbosity is controlled through `LOG_LEVEL`; tests and scripts can pass
+`options.env` without mutating `process.env`.
 
 ### Logger Shape
 
@@ -139,8 +143,22 @@ export type LogMethod = (obj: Record<string, unknown>, message?: string) => void
 ```
 
 The logger exposes pino-like level methods, but package docs should recommend
-object-first calls. String-only logs are allowed for compatibility, but examples
-must use structured metadata.
+object-first calls. The `ForgeLogger` wrapper does not expose string-only level
+methods. Consumers that need raw pino call shapes can use `unwrapPinoLogger()`.
+When there is no useful metadata, callers should pass `{}` explicitly.
+
+`child(bindings)` passes bindings directly through to pino child logger
+bindings. It does not summarize bindings first. Consumers should use child
+bindings only for stable correlation fields such as module keys, request IDs,
+and operation names, not raw payloads or secrets.
+
+`createForgeLogger()` accepts pino `base` fields, but defaults `base` to
+`undefined`/`null` so pino does not add noisy process or hostname fields unless
+the caller opts in. It does not accept construction-time `bindings`. Use
+`logger.child(bindings)` for correlation fields.
+
+When `createForgeLogger({ name })` is supplied, the pino logger should include
+that stable logger name in emitted records.
 
 ### Pino Access
 
@@ -153,9 +171,13 @@ instance. Normal app code should not need it.
 
 ## Default Pino Configuration
 
-`createForgeLogger()` must configure pino with a default `redact` list.
+`createForgeLogger()` should configure pino with a conservative default
+`redact` list as a best-effort backstop. This list is not expected to be a
+complete model of every Forge or Atlassian payload. The primary leak-prevention
+mechanism is still allow-list logging through Object Summary Policies, Field
+Transforms, and Forge invocation summaries.
 
-Default redacted paths:
+Initial default redacted paths:
 
 ```ts
 export const DEFAULT_REDACT_PATHS = [
@@ -204,15 +226,23 @@ Default redaction value:
 export const DEFAULT_REDACTION_CENSOR = "[redacted]";
 ```
 
-The default pino configuration must set `redact.remove` to `false` so log
-records retain field shape while removing values. Consumers can override
-`redact`, but a helper must exist to merge custom paths with defaults:
+The default pino configuration should set `redact.remove` to `false` so log
+records retain field shape while removing values. Tests should verify the
+default redaction paths cover representative secret-shaped fields, not claim
+complete coverage of every platform payload.
+
+A helper must exist to merge custom paths with defaults:
 
 ```ts
 export function withDefaultRedaction(
   redact?: pino.LoggerOptions["redact"],
 ): pino.LoggerOptions["redact"];
 ```
+
+`withDefaultRedaction()` means "defaults plus caller additions". The unresolved
+API decision for version 1 is that `createForgeLogger({ redact })` also merges
+caller redaction with defaults. There is no default-replacement mode in version
+1; add an explicit replacement option later only if a concrete need appears.
 
 ## LOG_LEVEL Forge Variable
 
@@ -298,16 +328,28 @@ Behavior:
 
 - `Result.ok` logs at `debug` by default, not `info`, to avoid high-volume
   success logs becoming a cost issue.
+- `Result.ok` values are never logged raw. Without `summarizeOk`, success logs
+  include only a generic success marker. With `summarizeOk`, the returned
+  metadata is merged into log metadata after normal summary/redaction handling.
 - `Result.err` logs at `error` by default.
+- `Result.err` values are normalized to `ProblemDetails` first and are never
+  logged raw by default. With `summarizeErr`, the returned metadata is added
+  after normal summary/redaction handling.
 - `ProblemDetails` errors log only `type`, `title`, `status`, `detail`,
   `instance`, and `timestamp`.
 - Unknown thrown values are normalized through `toProblemDetails()` from
   `@forge-ahead/errors`.
 - `Error` instances log `name`, `message`, and an optional stack only when
   `LOG_LEVEL` enables `debug` or `trace`.
+- Non-`ProblemDetails` `Error` instances should include `errorName` alongside
+  normalized `ProblemDetails` fields. Stack traces remain gated by effective
+  `debug` or `trace` level.
 - The old `forge-ahead` `logResult(result, label?)` console helper should not
   be implemented by this package. New code should use
   `logger.result(result, options)` or `logResult(logger, result, options)`.
+  Callers on noisy paths can skip success logging by not calling
+  `logger.result()` for those paths or by choosing explicit result logging
+  options.
 
 ## Forge Invocation Helpers
 
@@ -614,7 +656,10 @@ such as `truncateEvents()` or `logContext()`.
 Unit tests must cover:
 
 - `createForgeLogger()` applies default pino redaction.
-- Custom redaction paths merge with defaults.
+- `ForgeLogger` level methods require object-first calls at the TypeScript API
+  level.
+- Custom redaction paths merge with defaults in both `withDefaultRedaction()`
+  and `createForgeLogger({ redact })`.
 - `LOG_LEVEL` absent in production defaults to `info`.
 - `debug` emits no record when effective level is `info`.
 - `LOG_LEVEL=debug` emits debug records.
@@ -625,6 +670,7 @@ Unit tests must cover:
 - `logResult()` logs err results at error by default.
 - `logError()` normalizes `Error`, string, unknown, and existing
   `ProblemDetails` values.
+- `logError()` includes `errorName` for `Error` instances.
 - Error stack traces are omitted unless debug/trace is enabled.
 - Forge invocation summaries promote routing fields.
 - Web trigger `body`, `headers`, and `contextToken` are not logged raw.
