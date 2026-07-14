@@ -398,6 +398,65 @@ export function summarizeObjectForLog(
   };
 }
 
+export const FORGE_EVENT_SUMMARY_POLICY = defineLogObjectSummaryPolicy({
+  kind: "forgeEvent",
+  fields: {
+    eventType: "eventType",
+    method: "method",
+    path: "path",
+    requestId: "requestId",
+    cloudId: "context.cloudId",
+    moduleKey: "context.moduleKey",
+    functionKey: "call.functionKey",
+    appId: "app.id",
+    appVersion: "app.version",
+    selfGenerated: "selfGenerated",
+    queryParameters: "queryParameters",
+    contextToken: {
+      path: "contextToken",
+      transform: "tokenPreview",
+    },
+    headers: {
+      path: "headers",
+      transform: "omittedShape",
+    },
+    body: {
+      path: "body",
+      transform: "omittedShape",
+    },
+  },
+});
+
+export function summarizeForgeInvocation(
+  event: unknown,
+  options?: LogValueSummaryOptions,
+): Record<string, unknown> {
+  return summarizeObjectForLog(event, FORGE_EVENT_SUMMARY_POLICY, options);
+}
+
+export interface ForgeInvocationLogOptions extends LogValueSummaryOptions {
+  level?: "debug" | "info";
+  includeEventShape?: boolean;
+}
+
+export function logForgeInvocation(
+  logger: ForgeLogger,
+  event: unknown,
+  message?: string,
+  options?: ForgeInvocationLogOptions,
+): void {
+  const summary = summarizeForgeInvocation(event, options);
+  if (options?.includeEventShape) {
+    if (unwrapPinoLogger(logger).isLevelEnabled("debug")) {
+      summary.eventShape = summarizeForLog(event, options);
+    } else {
+      summary.eventShapeOmitted = "requires debug or trace";
+    }
+  }
+  const level = options?.level ?? "info";
+  logger[level](summary, message);
+}
+
 export type LogMethod = (
   obj: Record<string, unknown>,
   message?: string,
@@ -418,6 +477,11 @@ export interface ForgeLogger {
   debug: LogMethod;
   trace: LogMethod;
   child(bindings: Record<string, unknown>): ForgeLogger;
+  forgeInvocation(
+    event: unknown,
+    message?: string,
+    options?: ForgeInvocationLogOptions,
+  ): void;
 }
 
 const underlyingPinoLoggers = new WeakMap<ForgeLogger, pino.Logger>();
@@ -431,6 +495,8 @@ function wrapPinoLogger(pinoLogger: pino.Logger): ForgeLogger {
     debug: (obj, message) => pinoLogger.debug(obj, message),
     trace: (obj, message) => pinoLogger.trace(obj, message),
     child: (bindings) => wrapPinoLogger(pinoLogger.child(bindings)),
+    forgeInvocation: (event, message, options) =>
+      logForgeInvocation(forgeLogger, event, message, options),
   };
   underlyingPinoLoggers.set(forgeLogger, pinoLogger);
   return forgeLogger;
