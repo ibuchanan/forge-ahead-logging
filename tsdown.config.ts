@@ -2,7 +2,7 @@ import { defineConfig } from "tsdown";
 
 export default defineConfig({
   entry: {
-    index: "./src/errors.ts",
+    index: "./src/index.ts",
   },
   format: ["esm"],
   sourcemap: true,

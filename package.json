@@ -32,6 +32,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@forge-ahead/errors": "git+https://github.com/ibuchanan/forge-ahead-errors.git",
     "pino": "*"
   },
   "devDependencies": {
