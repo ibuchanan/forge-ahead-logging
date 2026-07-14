@@ -119,6 +119,285 @@ export function withDefaultRedaction(
   };
 }
 
+export type JSONValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JSONValue[]
+  | { [key: string]: JSONValue };
+
+export interface LogValueSummaryOptions {
+  maxDepth?: number;
+  maxArrayItems?: number;
+  maxObjectKeys?: number;
+  maxStringLength?: number;
+  redactedKeys?: readonly string[];
+}
+
+export const DEFAULT_LOG_VALUE_SUMMARY_OPTIONS: Required<LogValueSummaryOptions> =
+  {
+    maxDepth: 3,
+    maxArrayItems: 5,
+    maxObjectKeys: 12,
+    maxStringLength: 240,
+    redactedKeys: [],
+  };
+
+export function summarizeForLog(
+  value: unknown,
+  options?: LogValueSummaryOptions,
+): JSONValue {
+  const resolved: Required<LogValueSummaryOptions> = {
+    ...DEFAULT_LOG_VALUE_SUMMARY_OPTIONS,
+    ...options,
+  };
+  return summarizeValue(value, resolved, 0, new Set());
+}
+
+const DEFAULT_SECRET_SHAPED_KEYS: readonly string[] = [
+  "authorization",
+  "cookie",
+  "set-cookie",
+  "token",
+  "accesstoken",
+  "refreshtoken",
+  "contexttoken",
+  "jwt",
+  "apikey",
+  "api_key",
+  "password",
+  "secret",
+  "clientsecret",
+  "client_secret",
+];
+
+function isSecretShapedKey(
+  key: string,
+  redactedKeys: readonly string[],
+): boolean {
+  const lowerKey = key.toLowerCase();
+  return (
+    DEFAULT_SECRET_SHAPED_KEYS.includes(lowerKey) ||
+    redactedKeys.some((redactedKey) => redactedKey.toLowerCase() === lowerKey)
+  );
+}
+
+function summarizeValue(
+  value: unknown,
+  options: Required<LogValueSummaryOptions>,
+  depth: number,
+  seen: ReadonlySet<unknown>,
+): JSONValue {
+  if (
+    value === null ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
+    return value;
+  }
+  if (value === undefined) {
+    return "[undefined]";
+  }
+  if (typeof value === "function") {
+    return "[function]";
+  }
+  if (typeof value === "symbol") {
+    return "[symbol]";
+  }
+  if (typeof value === "bigint") {
+    return `[bigint ${value.toString()}]`;
+  }
+  if (typeof value === "string") {
+    if (value.length > options.maxStringLength) {
+      const omitted = value.length - options.maxStringLength;
+      return `${value.slice(0, options.maxStringLength)}...[${omitted} chars omitted]`;
+    }
+    return value;
+  }
+  if (
+    depth >= options.maxDepth &&
+    (Array.isArray(value) || typeof value === "object")
+  ) {
+    return "[max depth reached]";
+  }
+  if (Array.isArray(value)) {
+    if (seen.has(value)) {
+      return "[circular]";
+    }
+    const nextSeen = new Set(seen).add(value);
+    const items = value
+      .slice(0, options.maxArrayItems)
+      .map((item) => summarizeValue(item, options, depth + 1, nextSeen));
+    const omittedCount = value.length - options.maxArrayItems;
+    if (omittedCount > 0) {
+      items.push(`[${omittedCount} more items omitted]`);
+    }
+    return items;
+  }
+  if (typeof value === "object") {
+    if (seen.has(value)) {
+      return "[circular]";
+    }
+    const nextSeen = new Set(seen).add(value);
+    const entries = Object.entries(value as Record<string, unknown>);
+    const summary: { [key: string]: JSONValue } = {};
+    for (const [key, entryValue] of entries.slice(0, options.maxObjectKeys)) {
+      summary[key] = isSecretShapedKey(key, options.redactedKeys)
+        ? DEFAULT_REDACTION_CENSOR
+        : summarizeValue(entryValue, options, depth + 1, nextSeen);
+    }
+    const omittedCount = entries.length - options.maxObjectKeys;
+    if (omittedCount > 0) {
+      summary[`[${omittedCount} more keys omitted]`] = true;
+    }
+    return summary;
+  }
+  return null;
+}
+
+export type LogFieldPath = string | readonly string[];
+export type LogFieldTransform =
+  | "identity"
+  | "redact"
+  | "tokenPreview"
+  | "omittedShape";
+
+export type LogFieldSelection =
+  | LogFieldPath
+  | {
+      path: LogFieldPath;
+      transform?: LogFieldTransform;
+    };
+
+export type LogFieldMap = Readonly<Record<string, LogFieldSelection>>;
+
+export interface LogObjectSummaryPolicy {
+  kind: string;
+  fields: LogFieldMap;
+  labels?: LogFieldMap;
+}
+
+export interface LogObjectSummaryOptions extends LogValueSummaryOptions {
+  includeLabels?: boolean;
+}
+
+export function defineLogObjectSummaryPolicy(
+  policy: LogObjectSummaryPolicy,
+): LogObjectSummaryPolicy {
+  return policy;
+}
+
+function pathSegments(path: LogFieldPath): readonly string[] {
+  return typeof path === "string" ? path.split(".") : path;
+}
+
+function getAtPath(
+  value: unknown,
+  path: LogFieldPath,
+): { found: boolean; value: unknown } {
+  let current: unknown = value;
+  for (const segment of pathSegments(path)) {
+    if (
+      current === null ||
+      typeof current !== "object" ||
+      !(segment in current)
+    ) {
+      return { found: false, value: undefined };
+    }
+    current = (current as Record<string, unknown>)[segment];
+  }
+  return { found: true, value: current };
+}
+
+function hasFieldSelectionPath(
+  selection: LogFieldSelection,
+): selection is { path: LogFieldPath; transform?: LogFieldTransform } {
+  return typeof selection === "object" && !Array.isArray(selection);
+}
+
+function selectionPathAndTransform(selection: LogFieldSelection): {
+  path: LogFieldPath;
+  transform: LogFieldTransform;
+} {
+  if (hasFieldSelectionPath(selection)) {
+    return {
+      path: selection.path,
+      transform: selection.transform ?? "identity",
+    };
+  }
+  return { path: selection, transform: "identity" };
+}
+
+function omittedShapeOf(value: unknown): JSONValue {
+  if (typeof value === "string") {
+    return { omitted: true, length: value.length };
+  }
+  if (Array.isArray(value)) {
+    return { omitted: true, items: value.length };
+  }
+  if (value !== null && typeof value === "object") {
+    return { omitted: true, keys: Object.keys(value).length };
+  }
+  return { omitted: true };
+}
+
+function applyFieldTransform(
+  transform: LogFieldTransform,
+  value: unknown,
+  options: Required<LogValueSummaryOptions>,
+): JSONValue {
+  switch (transform) {
+    case "redact":
+      return DEFAULT_REDACTION_CENSOR;
+    case "tokenPreview":
+      return typeof value === "string"
+        ? `${value.slice(0, 3)}...${value.slice(-3)}`
+        : DEFAULT_REDACTION_CENSOR;
+    case "omittedShape":
+      return omittedShapeOf(value);
+    default:
+      return summarizeValue(value, options, 0, new Set());
+  }
+}
+
+function summarizeFieldMap(
+  value: unknown,
+  fields: LogFieldMap,
+  options: Required<LogValueSummaryOptions>,
+): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const [alias, selection] of Object.entries(fields)) {
+    const { path, transform } = selectionPathAndTransform(selection);
+    const { found, value: fieldValue } = getAtPath(value, path);
+    if (!found) {
+      continue;
+    }
+    result[alias] = applyFieldTransform(transform, fieldValue, options);
+  }
+  return result;
+}
+
+export function summarizeObjectForLog(
+  value: unknown,
+  policy: LogObjectSummaryPolicy,
+  options?: LogObjectSummaryOptions,
+): Record<string, unknown> {
+  const resolvedOptions: Required<LogValueSummaryOptions> = {
+    ...DEFAULT_LOG_VALUE_SUMMARY_OPTIONS,
+    ...options,
+  };
+  const labels =
+    options?.includeLabels && policy.labels
+      ? summarizeFieldMap(value, policy.labels, resolvedOptions)
+      : {};
+  return {
+    kind: policy.kind,
+    ...summarizeFieldMap(value, policy.fields, resolvedOptions),
+    ...labels,
+  };
+}
+
 export type LogMethod = (
   obj: Record<string, unknown>,
   message?: string,
