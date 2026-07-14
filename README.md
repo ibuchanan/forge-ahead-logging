@@ -236,31 +236,6 @@ traces are included only when the logger's effective level is `debug` or
 `trace`. `logger.result(result, options)` and
 `logger.errorResult(error, options)` are the equivalent logger methods.
 
-## Setup
-
-Use Node 22 or newer and npm for the local package workflow:
-
-```sh
-npm install
-npm run build
-```
-
-## Development
-
-Common package scripts:
-
-| Command | Purpose |
-| --- | --- |
-| `npm run build` | Build the ESM package with `tsdown`. |
-| `npm run dev` | Rebuild with `tsdown --watch`. |
-| `npm run check` | Run format, lint, TypeScript, and test checks. |
-| `npm run format` | Format files with Biome. |
-| `npm run lint:fix` | Apply Biome lint fixes. |
-| `npm test` | Run the Vitest test suite once. |
-| `npm run test:watch` | Run Vitest in watch mode. |
-| `npm run test:coverage` | Run Vitest with coverage reporting. |
-| `npm run changelog` | Generate changelog output with `git cliff`. |
-
 ## API Surface
 
 - `createForgeLogger(options?)` returns a `ForgeLogger`; `unwrapPinoLogger(logger)`
@@ -282,17 +257,10 @@ Common package scripts:
   `logger.result(...)`, and `logger.errorResult(...)` cover Result/Error logging,
   integrated with `@forge-ahead/errors`.
 
-## Project Layout
+## Development
 
-- `src/index.ts` contains the package implementation and public exports.
-- `test/*.test.ts` covers log level resolution, the core logger, default
-  redaction, bounded summaries, Object Summary Policies, Forge invocation
-  logging, and Result/Error logging.
-- `tsdown.config.ts` builds `src/index.ts` as the package entrypoint.
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) and
+See [DEVELOPMENT.md](DEVELOPMENT.md) for local setup, package scripts, and
+project layout. See [CONTRIBUTING.md](CONTRIBUTING.md) and
 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for repository contribution guidance.
 
 ## License
