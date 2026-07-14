@@ -46,3 +46,21 @@ The pino redaction paths applied by the Forge Logging Package to catch common
 secret-shaped fields. This is a secondary defense, not a complete model of
 Forge or Atlassian payload safety.
 _Avoid_: complete redaction policy, primary payload safety mechanism
+
+**Debug Probe**:
+A development-time logging convenience that wraps an expression or value in a
+bounded `debug` or `trace` log without changing the value passed through
+application code, including the success or failure outcome of asynchronous
+work. A Debug Probe may avoid computing probe-only metadata when its log level
+is disabled, but it must not make the probed application expression conditional
+on logging.
+_Avoid_: icecream clone, demo logging, production audit log
+
+**Demo Narrative Logging**:
+Example-code logging that tells a deliberate story for readers or demos and is
+clearly marked as outside normal production logging patterns. Demo Narrative
+Logging uses the same structured log records as the production logger, but is
+kept behind an explicit demo-oriented API surface; its records are flat,
+automatically ordered steps with an explicit demo-only marker and
+caller-supplied story identity.
+_Avoid_: debug probe, operational log, production workflow log
