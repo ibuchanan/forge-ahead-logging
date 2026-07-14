@@ -1,3 +1,5 @@
+import type { ProblemDetails, Result } from "@forge-ahead/errors";
+import { toProblemDetails } from "@forge-ahead/errors";
 import pino from "pino";
 
 export type ForgeLogLevel =
@@ -457,6 +459,88 @@ export function logForgeInvocation(
   logger[level](summary, message);
 }
 
+export interface LogResultOptions<T, E> {
+  message?: string;
+  successMessage?: string;
+  errorMessage?: string;
+  successLevel?: "debug" | "info";
+  errorLevel?: "warn" | "error";
+  summarizeOk?: (value: T) => Record<string, unknown>;
+  summarizeErr?: (error: E) => Record<string, unknown>;
+}
+
+function approvedProblemFields(
+  problemDetails: ProblemDetails,
+): Record<string, unknown> {
+  const { type, title, status, detail, timestamp, instance } = problemDetails;
+  const approved: Record<string, unknown> = {
+    type,
+    title,
+    status,
+    detail,
+    timestamp,
+  };
+  if (instance !== undefined) {
+    approved.instance = instance;
+  }
+  return approved;
+}
+
+export function logResult<T, E = ProblemDetails>(
+  logger: ForgeLogger,
+  result: Result<T, E>,
+  options?: LogResultOptions<T, E>,
+): void {
+  if (result.isOk()) {
+    const level = options?.successLevel ?? "debug";
+    const metadata: Record<string, unknown> = { ok: true };
+    if (options?.summarizeOk) {
+      Object.assign(metadata, options.summarizeOk(result.value));
+    }
+    logger[level](metadata, options?.successMessage ?? options?.message);
+    return;
+  }
+  const level = options?.errorLevel ?? "error";
+  const problemDetails = toProblemDetails(result.error);
+  const metadata = approvedProblemFields(problemDetails);
+  if (result.error instanceof Error) {
+    metadata.errorName = result.error.name;
+    if (
+      result.error.stack &&
+      unwrapPinoLogger(logger).isLevelEnabled("debug")
+    ) {
+      metadata.stack = result.error.stack;
+    }
+  }
+  if (options?.summarizeErr) {
+    Object.assign(metadata, options.summarizeErr(result.error));
+  }
+  logger[level](metadata, options?.errorMessage ?? options?.message);
+}
+
+export interface LogErrorOptions {
+  message?: string;
+  level?: "warn" | "error" | "fatal";
+  status?: number;
+}
+
+export function logError(
+  logger: ForgeLogger,
+  error: unknown,
+  options?: LogErrorOptions,
+): void {
+  const level = options?.level ?? "error";
+  const problemDetails = toProblemDetails(error, options?.status ?? 500);
+  const metadata = approvedProblemFields(problemDetails);
+  if (error instanceof Error) {
+    metadata.errorName = error.name;
+    if (error.stack && unwrapPinoLogger(logger).isLevelEnabled("debug")) {
+      metadata.stack = error.stack;
+    }
+  }
+  logger[level](metadata, options?.message);
+}
+
 export type LogMethod = (
   obj: Record<string, unknown>,
   message?: string,
@@ -482,6 +566,11 @@ export interface ForgeLogger {
     message?: string,
     options?: ForgeInvocationLogOptions,
   ): void;
+  result<T, E = ProblemDetails>(
+    result: Result<T, E>,
+    options?: LogResultOptions<T, E>,
+  ): void;
+  errorResult(error: unknown, options?: LogErrorOptions): void;
 }
 
 const underlyingPinoLoggers = new WeakMap<ForgeLogger, pino.Logger>();
@@ -497,6 +586,8 @@ function wrapPinoLogger(pinoLogger: pino.Logger): ForgeLogger {
     child: (bindings) => wrapPinoLogger(pinoLogger.child(bindings)),
     forgeInvocation: (event, message, options) =>
       logForgeInvocation(forgeLogger, event, message, options),
+    result: (result, options) => logResult(forgeLogger, result, options),
+    errorResult: (error, options) => logError(forgeLogger, error, options),
   };
   underlyingPinoLoggers.set(forgeLogger, pinoLogger);
   return forgeLogger;
