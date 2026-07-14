@@ -1,60 +1,45 @@
 # @forge-ahead/logging
 
-<!-- cspell:words neverthrow -->
-
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg?style=flat-square)](LICENSE)
 
-TypeScript error helpers for Forge Ahead packages. The package combines
-[RFC 9457 Problem Details](https://www.rfc-editor.org/rfc/rfc9457.html) with
-[`neverthrow`](https://github.com/supermacro/neverthrow) `Result` values so
-callers can return structured HTTP-style errors without throwing.
+A small, opinionated, Forge-oriented wrapper around [`pino`](https://getpino.io/).
+It keeps structured logging as the primary interface and adds Forge-specific
+helpers that reduce log bloat, avoid customer-data leaks, and make production
+debug logging opt-in through a declared Forge variable.
 
 This package is currently private (`"private": true` in `package.json`), so use
-it from this repository or a configured private workspace rather than installing
-it from the public npm registry.
+it from this repository or a configured private workspace rather than
+installing it from the public npm registry.
 
 In a consuming Forge app with access to the package registry:
 
 ```sh
-npm install @forge-ahead/errors
+npm install @forge-ahead/logging
 ```
 
 ## Why this exists
 
-`Result<T, E>` makes failure part of the function type. The underlying
-`neverthrow` package describes a `Result` as either success (`Ok`) or failure
-(`Err`), and recommends consuming results with methods such as `.match()` or
-`.unwrapOr()` so errors are handled explicitly.
+Forge apps run in a cost-metered, multi-tenant runtime handling real customer
+data. Logging in that environment has different defaults than a typical
+Node service:
 
-That explicitness matters in Forge apps because Forge has more than one error
-channel:
+- Verbose success-path logging is a cost problem, not just noise.
+- Logging raw event payloads, headers, or tokens is a customer-data leak, not
+  a convenience.
+- Debug logging should be an explicit, short-lived opt-in — not a code
+  default that gets left on in production.
 
-- [Forge resolver](https://developer.atlassian.com/platform/forge/runtime-reference/forge-resolver/)
-  and
-  [`invoke`](https://developer.atlassian.com/platform/forge/apis-reference/ui-api-bridge/invoke/)
-  types allow resolver functions to return `void`. For functions that otherwise
-  have no domain return value, a thrown exception is easy to miss in the type
-  contract. Returning `Result<void, ProblemDetails>` keeps the failure path
-  visible.
-- [Web trigger](https://developer.atlassian.com/platform/forge/runtime-reference/web-trigger/)
-  and
-  [scheduled trigger](https://developer.atlassian.com/platform/forge/function-reference/scheduled-trigger/)
-  responses are interpreted by the Forge platform. Invalid web trigger responses
-  become `500` responses, scheduled trigger responses that do not match the
-  expected shape are recorded as `424 Failed dependency`, and `500`-series
-  scheduled trigger status codes are treated as errors.
-- [Async events](https://developer.atlassian.com/platform/forge/runtime-reference/async-events-api/)
-  are retried automatically until successful within the retention window. Forge
-  considers runtime errors, timeouts, out-of-memory failures, network errors,
-  insufficient permissions, and invocation limits to be app-level errors. A
-  handler can also return an `InvocationError` to request a retry explicitly.
+This package assumes a Forge runtime variable named `LOG_LEVEL` and resolves
+it the same way in every app, so debug logging is disabled in production
+unless that variable explicitly enables it. It wraps `pino` rather than
+replacing it: normal app code never needs to import `pino` directly, but
+[`unwrapPinoLogger()`](#api-surface) remains available as an escape hatch for
+code that does.
 
-The practical rule is: do not rely on thrown exceptions as the contract between
-Forge app functions. Return a typed `Result` with `ProblemDetails` instead, then
-translate that result at the Forge boundary. This gives humans and AI coding
-agents early feedback in code review and type checking, before an error becomes
-a swallowed `void`, a Forge-level platform error, or an unintended queued-event
-retry at runtime.
+This package does not replace Forge invocation metrics, does not invent a
+general observability framework, and does not attempt to model every possible
+Atlassian payload shape — its redaction and summary tools are a backstop and
+an allow-list, not a guarantee.
 
 ## Usage
 
@@ -62,30 +47,194 @@ The package is published as ESM and targets Node 22 or newer, matching
 Atlassian's recommended Forge runtime floor for new deployments.
 
 ```ts
-import {
-  ok,
-  StandardError,
-  type ProblemDetails,
-  type Result,
-} from "@forge-ahead/errors";
+import { createForgeLogger } from "@forge-ahead/logging";
 
-export function requireManifestPath(
-  path?: string,
-): Result<string, ProblemDetails> {
-  if (!path) {
-    return StandardError.getOrDefault(404).error("manifest.yml not found");
-  }
+const logger = createForgeLogger({ name: "my-forge-app" });
 
-  return ok(path);
-}
-
-const result = requireManifestPath(undefined);
-
-result.match(
-  (path) => console.log(path),
-  (problem) => console.error(problem.status, problem.detail),
-);
+logger.info({ userId: "abc-123" }, "handled request");
+logger.debug({}, "verbose diagnostic detail");
 ```
+
+Level methods (`fatal`, `error`, `warn`, `info`, `debug`, `trace`) are
+object-first: pass a metadata object as the first argument, using `{}` when
+there is no metadata to attach. This package's `ForgeLogger` does not expose
+pino's string-only call shape.
+
+## `LOG_LEVEL`
+
+`createForgeLogger()` resolves its effective level in this order:
+
+1. A valid `LOG_LEVEL` value (`fatal`, `error`, `warn`, `info`, `debug`,
+   `trace`, or `silent`).
+2. `debug`, when `NODE_ENV` is `development` and `LOG_LEVEL` is unset.
+3. `info` otherwise — the safe default for both local runs and production.
+
+An invalid `LOG_LEVEL` value falls back to `info` rather than throwing.
+`resolveLogLevel()` and `getLogLevel()` expose this same resolution for
+callers that need it directly, and `options.env` lets tests and scripts
+inject an environment object instead of mutating `process.env`:
+
+```ts
+import { getLogLevel, resolveLogLevel } from "@forge-ahead/logging";
+
+resolveLogLevel({ LOG_LEVEL: "debug" });
+// { level: "debug", source: "LOG_LEVEL" }
+
+getLogLevel({ LOG_LEVEL: "not-a-level" });
+// "info" (falls back; resolveLogLevel() also reports invalidValue)
+```
+
+In a deployed Forge app, `LOG_LEVEL` is a non-secret Forge runtime variable.
+`debug` and `trace` are meant for short-lived diagnostics, set explicitly —
+not left on by default.
+
+## Default redaction is a backstop
+
+`createForgeLogger()` configures pino with a conservative default `redact`
+list covering representative secret-shaped fields (`authorization`, `cookie`,
+`token`, `password`, `secret`, and similar). Redacted fields keep their key
+with the value replaced by `[redacted]`, rather than being removed.
+
+This list is **not** a complete model of every Forge or Atlassian payload.
+The primary leak-prevention mechanism is allow-list logging through Object
+Summary Policies and Forge invocation summaries (below) — default redaction
+is a secondary safety net for whatever those allow-lists miss.
+
+Custom redaction paths merge with the defaults rather than replacing them:
+
+```ts
+import { createForgeLogger, withDefaultRedaction } from "@forge-ahead/logging";
+
+createForgeLogger({ redact: ["myApp.internalToken"] });
+
+withDefaultRedaction(["myApp.internalToken"]);
+// { paths: [...defaults, "myApp.internalToken"],
+//   censor: "[redacted]", remove: false }
+```
+
+## Object Summary Policies
+
+Rich domain objects (deployments, issues, users, and so on) can be logged
+through a data-only allow-list policy instead of their raw shape:
+
+```ts
+import { defineLogObjectSummaryPolicy, summarizeObjectForLog } from "@forge-ahead/logging";
+
+const deploymentPolicy = defineLogObjectSummaryPolicy({
+  kind: "deployment",
+  fields: {
+    deploymentSequenceNumber: "deploymentSequenceNumber",
+    updateSequenceNumber: "updateSequenceNumber",
+  },
+  labels: {
+    displayName: "displayName", // human-readable; excluded by default
+  },
+});
+
+summarizeObjectForLog(deployment, deploymentPolicy);
+// { kind: "deployment", deploymentSequenceNumber: 42, updateSequenceNumber: 7 }
+
+summarizeObjectForLog(deployment, deploymentPolicy, { includeLabels: true });
+// adds { displayName: "..." }
+```
+
+Fields are included by default; `labels` (human-readable, possibly
+customer-identifying text) are excluded unless a caller opts in with
+`includeLabels: true`. Fields missing from the source value are omitted
+rather than emitted as `undefined`.
+
+Each field selection can apply a built-in Field Transform instead of the
+default `identity` summary:
+
+| Transform | Behavior |
+| --- | --- |
+| `identity` | Summarize the value with `summarizeForLog()` (the default). |
+| `redact` | Emit `[redacted]` when the value is present. |
+| `tokenPreview` | String → `"123...890"`; other values → `[redacted]`. |
+| `omittedShape` | Shape only: `{ omitted: true, length: N }`. |
+
+Custom extractor callbacks are intentionally not supported — a selection is
+always a field path plus, optionally, one of these four transforms.
+
+## Forge invocation logging
+
+`FORGE_EVENT_SUMMARY_POLICY` is a ready-made policy for Forge invocation-like
+objects (resolver/web-trigger events, and similar). It works on `unknown`
+input without importing a Forge TypeScript interface, and never logs `body`,
+`headers`, or `contextToken` raw:
+
+```ts
+import { logForgeInvocation } from "@forge-ahead/logging";
+
+logForgeInvocation(logger, event, "handling request");
+// { kind: "forgeEvent", eventType, method, path, cloudId, ..., contextToken: "123...890",
+//   headers: { omitted: true, keys: 2 }, body: { omitted: true, length: 20 } }
+```
+
+The same helper is available as `logger.forgeInvocation(event, message, options)`.
+Passing `includeEventShape: true` adds the full bounded event shape — but only
+when the logger's effective level is `debug` or `trace`. At `info` or higher
+it instead adds `eventShapeOmitted: "requires debug or trace"`, so opting in
+never silently leaks a payload in production:
+
+```ts
+logForgeInvocation(logger, event, "handling request", {
+  includeEventShape: true,
+});
+// at info:  { ..., eventShapeOmitted: "requires debug or trace" }
+// at debug: { ..., eventShape: { /* bounded, summarized event */ } }
+```
+
+## Result and Error logging
+
+`logResult()` and `logError()` integrate directly with
+[`@forge-ahead/errors`](https://github.com/ibuchanan/forge-ahead-errors),
+rather than only accepting structural error payloads:
+
+```ts
+import { ok, StandardError } from "@forge-ahead/errors";
+import { logResult } from "@forge-ahead/logging";
+
+const notFound = StandardError.getOrDefault(404).error("not found");
+
+logResult(logger, notFound);
+// Err: logs at "error" by default — only approved ProblemDetails fields
+//   (type, title, status, detail, timestamp, instance)
+
+logResult(logger, ok({ deploymentSequenceNumber: 42 }));
+// Ok: logs at "debug" by default — a generic { ok: true } marker,
+//   never the raw value
+```
+
+Both directions never log the raw value by default. `summarizeOk`/`summarizeErr`
+options add caller-provided metadata on top, after that normal handling:
+
+```ts
+logResult(logger, result, {
+  summarizeOk: (deployment) => ({
+    deploymentSequenceNumber: deployment.deploymentSequenceNumber,
+  }),
+  summarizeErr: (problem) => ({ retryable: problem.status >= 500 }),
+});
+```
+
+`logError()` is the equivalent helper for `catch` blocks, normalizing any
+thrown value through `@forge-ahead/errors`' `toProblemDetails()`:
+
+```ts
+import { logError } from "@forge-ahead/logging";
+
+try {
+  await risky();
+} catch (thrown) {
+  logError(logger, thrown);
+}
+```
+
+Non-`ProblemDetails` `Error` instances also get an `errorName` field. Stack
+traces are included only when the logger's effective level is `debug` or
+`trace`. `logger.result(result, options)` and
+`logger.errorResult(error, options)` are the equivalent logger methods.
 
 ## Setup
 
@@ -104,7 +253,7 @@ Common package scripts:
 | --- | --- |
 | `npm run build` | Build the ESM package with `tsdown`. |
 | `npm run dev` | Rebuild with `tsdown --watch`. |
-| `npm run check` | Run lint, format, and TypeScript checks. |
+| `npm run check` | Run format, lint, TypeScript, and test checks. |
 | `npm run format` | Format files with Biome. |
 | `npm run lint:fix` | Apply Biome lint fixes. |
 | `npm test` | Run the Vitest test suite once. |
@@ -114,25 +263,32 @@ Common package scripts:
 
 ## API Surface
 
-- `ProblemDetails` and `ValidationProblemDetails` model RFC 9457-style error
-  payloads.
-- `StandardError` registers HTTP status/title pairs and returns
-  `Result<never, ProblemDetails>` from `error()`.
-- `isProblemDetails`, `toErrorMessage`, `toProblemDetails`, and `problemResult`
-  normalize unknown thrown values into `ProblemDetails`.
-- `ShellExitCodes` documents common shell exit codes.
-- Core `neverthrow` exports such as `ok`, `err`, `Result`, `ResultAsync`, and
-  `safeTry` are re-exported so consumers can import from one package.
-
-`StandardError.toExitCode()` intentionally returns `1` for all supplied status
-codes; success paths should exit with `0` without calling it.
+- `createForgeLogger(options?)` returns a `ForgeLogger`; `unwrapPinoLogger(logger)`
+  exposes the underlying pino instance for interop.
+- `resolveLogLevel(env?)` and `getLogLevel(env?)` resolve `LOG_LEVEL`/`NODE_ENV`
+  without logging as a side effect.
+- `withDefaultRedaction(redact?)`, `DEFAULT_REDACT_PATHS`, and
+  `DEFAULT_REDACTION_CENSOR` back the default redaction backstop.
+- `summarizeForLog(value, options?)` produces JSON-safe, bounded,
+  depth/size-limited summaries of arbitrary values.
+- `defineLogObjectSummaryPolicy(policy)` and
+  `summarizeObjectForLog(value, policy, options?)` implement Object Summary
+  Policies and the `identity`/`redact`/`tokenPreview`/`omittedShape` Field
+  Transforms.
+- `FORGE_EVENT_SUMMARY_POLICY`, `summarizeForgeInvocation(event, options?)`,
+  `logForgeInvocation(logger, event, message?, options?)`, and
+  `logger.forgeInvocation(...)` cover Forge invocation logging.
+- `logResult(logger, result, options?)`, `logError(logger, error, options?)`,
+  `logger.result(...)`, and `logger.errorResult(...)` cover Result/Error logging,
+  integrated with `@forge-ahead/errors`.
 
 ## Project Layout
 
-- `src/errors.ts` contains the package implementation and public exports.
-- `test/errors.test.ts` covers the Problem Details shape, standard errors, and
-  conversion helpers.
-- `tsdown.config.ts` builds `src/errors.ts` as the package entrypoint.
+- `src/index.ts` contains the package implementation and public exports.
+- `test/*.test.ts` covers log level resolution, the core logger, default
+  redaction, bounded summaries, Object Summary Policies, Forge invocation
+  logging, and Result/Error logging.
+- `tsdown.config.ts` builds `src/index.ts` as the package entrypoint.
 
 ## Contributing
 
