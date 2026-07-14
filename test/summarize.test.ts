@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { summarizeForLog } from "../src/index";
+import { DEFAULT_REDACT_PATHS, summarizeForLog } from "../src/index";
 
 describe("summarizeForLog", () => {
   it("passes through JSON-safe primitives unchanged", () => {
@@ -60,6 +60,23 @@ describe("summarizeForLog", () => {
     const result = summarizeForLog({ Password: "hunter2", ok: "fine" });
 
     expect(result).toEqual({ Password: "[redacted]", ok: "fine" });
+  });
+
+  it("redacts every base name derivable from DEFAULT_REDACT_PATHS, not just a sample", () => {
+    const baseNames = new Set(
+      DEFAULT_REDACT_PATHS.map((path) => {
+        const segments = path.split(".");
+        return segments[segments.length - 1].toLowerCase();
+      }),
+    );
+
+    for (const name of baseNames) {
+      const result = summarizeForLog({ [name]: "secret-value" }) as Record<
+        string,
+        unknown
+      >;
+      expect(result[name]).toBe("[redacted]");
+    }
   });
 
   it("stops recursing past maxDepth", () => {

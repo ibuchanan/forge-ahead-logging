@@ -81,12 +81,6 @@ export const DEFAULT_REDACT_PATHS: readonly string[] = [
   "*.client_secret",
   "authorization",
   "Authorization",
-  "headers.authorization",
-  "headers.Authorization",
-  "headers.cookie",
-  "headers.Cookie",
-  "headers.set-cookie",
-  "headers.Set-Cookie",
   "contextToken",
   "token",
   "accessToken",
@@ -157,22 +151,14 @@ export function summarizeForLog(
   return summarizeValue(value, resolved, 0, new Set());
 }
 
-const DEFAULT_SECRET_SHAPED_KEYS: readonly string[] = [
-  "authorization",
-  "cookie",
-  "set-cookie",
-  "token",
-  "accesstoken",
-  "refreshtoken",
-  "contexttoken",
-  "jwt",
-  "apikey",
-  "api_key",
-  "password",
-  "secret",
-  "clientsecret",
-  "client_secret",
-];
+function baseNameOf(path: string): string {
+  const segments = path.split(".");
+  return segments[segments.length - 1].toLowerCase();
+}
+
+const DEFAULT_SECRET_SHAPED_KEYS: readonly string[] = Array.from(
+  new Set(DEFAULT_REDACT_PATHS.map(baseNameOf)),
+);
 
 function isSecretShapedKey(
   key: string,
