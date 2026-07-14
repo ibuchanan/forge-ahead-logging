@@ -1,10 +1,13 @@
 import pino from "pino";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   createForgeLogger,
   logForgeInvocation,
   summarizeForgeInvocation,
 } from "../src/index";
+import { captureForgeLoggerOutput } from "./helpers/capture-forge-logger-output";
+
+const { loggedRecords } = captureForgeLoggerOutput();
 
 describe("summarizeForgeInvocation", () => {
   it("matches the spec's Forge event summary example", () => {
@@ -55,24 +58,6 @@ describe("summarizeForgeInvocation", () => {
     });
   });
 });
-
-let writtenLines: string[];
-
-beforeEach(() => {
-  writtenLines = [];
-  vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
-    writtenLines.push(String(chunk));
-    return true;
-  });
-});
-
-afterEach(() => {
-  vi.restoreAllMocks();
-});
-
-function loggedRecords(): Record<string, unknown>[] {
-  return writtenLines.map((line) => JSON.parse(line));
-}
 
 describe("logForgeInvocation", () => {
   it("logs the policy-selected summary at info by default", () => {

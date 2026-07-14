@@ -1,28 +1,13 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   createForgeLogger,
   DEFAULT_REDACT_PATHS,
   DEFAULT_REDACTION_CENSOR,
   withDefaultRedaction,
 } from "../src/index";
+import { captureForgeLoggerOutput } from "./helpers/capture-forge-logger-output";
 
-let writtenLines: string[];
-
-beforeEach(() => {
-  writtenLines = [];
-  vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
-    writtenLines.push(String(chunk));
-    return true;
-  });
-});
-
-afterEach(() => {
-  vi.restoreAllMocks();
-});
-
-function loggedRecords(): Record<string, unknown>[] {
-  return writtenLines.map((line) => JSON.parse(line));
-}
+const { loggedRecords } = captureForgeLoggerOutput();
 
 describe("createForgeLogger default redaction", () => {
   it("censors a representative secret-shaped field but keeps the key present", () => {
