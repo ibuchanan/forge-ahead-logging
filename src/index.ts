@@ -53,6 +53,72 @@ export function getLogLevel(
   return resolveLogLevel(env).level;
 }
 
+/**
+ * A best-effort backstop against representative secret-shaped fields, not a
+ * complete model of every Forge or Atlassian payload. Allow-list logging
+ * through Object Summary Policies remains the primary leak-prevention
+ * mechanism.
+ */
+export const DEFAULT_REDACT_PATHS: readonly string[] = [
+  "*.authorization",
+  "*.Authorization",
+  "*.cookie",
+  "*.Cookie",
+  "*.set-cookie",
+  "*.Set-Cookie",
+  "*.token",
+  "*.accessToken",
+  "*.refreshToken",
+  "*.contextToken",
+  "*.jwt",
+  "*.apiKey",
+  "*.api_key",
+  "*.password",
+  "*.secret",
+  "*.clientSecret",
+  "*.client_secret",
+  "authorization",
+  "Authorization",
+  "headers.authorization",
+  "headers.Authorization",
+  "headers.cookie",
+  "headers.Cookie",
+  "headers.set-cookie",
+  "headers.Set-Cookie",
+  "contextToken",
+  "token",
+  "accessToken",
+  "refreshToken",
+  "jwt",
+  "apiKey",
+  "api_key",
+  "password",
+  "secret",
+  "clientSecret",
+  "client_secret",
+];
+
+export const DEFAULT_REDACTION_CENSOR = "[redacted]";
+
+function redactPathsOf(
+  redact: pino.LoggerOptions["redact"] | undefined,
+): readonly string[] {
+  if (!redact) {
+    return [];
+  }
+  return Array.isArray(redact) ? redact : redact.paths;
+}
+
+export function withDefaultRedaction(
+  redact?: pino.LoggerOptions["redact"],
+): pino.LoggerOptions["redact"] {
+  return {
+    paths: [...DEFAULT_REDACT_PATHS, ...redactPathsOf(redact)],
+    censor: DEFAULT_REDACTION_CENSOR,
+    remove: false,
+  };
+}
+
 export type LogMethod = (
   obj: Record<string, unknown>,
   message?: string,
@@ -108,6 +174,7 @@ export function createForgeLogger(
     level,
     name: options.name,
     base: options.base ?? {},
+    redact: withDefaultRedaction(options.redact),
   });
   return wrapPinoLogger(pinoLogger);
 }
