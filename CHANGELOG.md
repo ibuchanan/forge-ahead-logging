@@ -1,3 +1,10 @@
+## What's Changed in 0.2.0
+* feat: NONE Add Demo Narrative Logging demo subpath
+* feat: NONE Add Debug Probe logging
+* docs: NONE Remove implemented Debug Probe/Demo Narrative specs
+
+**Full Changelog**: https://github.com/ibuchanan/forge-ahead-logging/compare/v0.1.0...v0.2.0
+
 ## What's Changed
 * docs: NONE Record ADR for demo narrative logging subpath
 * build: NONE Add release preparation script
