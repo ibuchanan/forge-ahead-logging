@@ -8,6 +8,10 @@
     ".": {
       "import": "./dist/index.mjs",
       "types": "./dist/index.d.mts"
+    },
+    "./demo": {
+      "import": "./dist/demo.mjs",
+      "types": "./dist/demo.d.mts"
     }
   },
   "main": "dist/index.mjs",

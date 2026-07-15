@@ -290,10 +290,43 @@ application behavior conditional on logging.
 method, including on `child()` loggers, where emitted records carry the
 child's bindings.
 
-Debug Probe is a development-time convenience, distinct from Demo Narrative
-Logging: a probe wraps real application code and preserves its behavior,
-while Demo Narrative Logging is example-only storytelling with no
-pass-through value.
+Debug Probe is a development-time convenience, distinct from [Demo Narrative
+Logging](#demo-narrative-logging): a probe wraps real application code and
+preserves its behavior, while Demo Narrative Logging is example-only
+storytelling with no pass-through value.
+
+## Demo Narrative Logging
+
+Demo Narrative Logging is for **example code**, not production apps: it lets
+a static repo "tell its story" through ordinary structured `ForgeLogger`
+records, so a demo reads clearly even without live narration. It is kept
+behind an explicit `@forge-ahead/logging/demo` subpath rather than the root
+package, so demo-only imports are easy to spot in review and never end up in
+production code:
+
+```ts
+import { createForgeLogger } from "@forge-ahead/logging";
+import { createDemoNarrative } from "@forge-ahead/logging/demo";
+
+const logger = createForgeLogger({ name: "onboarding-demo" });
+const demo = createDemoNarrative(logger, { storyId: "onboarding" });
+
+demo.step("user signs up");
+demo.step("welcome email queued", { templateId: "welcome-v2" });
+```
+
+Every step logs at `info` through the supplied logger, with `kind:
+"demoNarrativeStep"`, `demoOnly: true`, the narrative's `storyId`, and an
+automatically incrementing `stepNumber`:
+
+```json
+{ "level": 30, "kind": "demoNarrativeStep", "demoOnly": true, "storyId": "onboarding", "stepNumber": 1, "msg": "user signs up" }
+```
+
+Step metadata is optional — message-only steps are valid — and, when
+supplied, is summarized and redacted the same way as everywhere else in this
+package, via `summarizeForLog()`. Use a distinct `storyId` per narrative
+thread; nested or child narratives are not supported in this version.
 
 ## API Surface
 
@@ -317,6 +350,9 @@ pass-through value.
   integrated with `@forge-ahead/errors`.
 - `logProbe(logger, label, valueOrThunk, options?)` and `logger.probe(...)`
   implement Debug Probe.
+- `createDemoNarrative(logger, { storyId })` from the `@forge-ahead/logging/demo`
+  subpath implements Demo Narrative Logging; it is not exported from the root
+  package.
 
 ## Development
 
