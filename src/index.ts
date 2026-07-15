@@ -551,6 +551,116 @@ export function logError(
   logger[level](metadata, options?.message);
 }
 
+export type DebugProbeLevel = "debug" | "trace";
+
+export interface LogProbeOptions {
+  level?: DebugProbeLevel;
+  metadata?: unknown | (() => unknown);
+}
+
+function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as PromiseLike<unknown>).then === "function"
+  );
+}
+
+function isProbeLevelEnabled(
+  logger: ForgeLogger,
+  level: DebugProbeLevel,
+): boolean {
+  return unwrapPinoLogger(logger).isLevelEnabled(level);
+}
+
+function resolveProbeMetadata(
+  options: LogProbeOptions | undefined,
+): JSONValue | undefined {
+  if (options?.metadata === undefined) {
+    return undefined;
+  }
+  const metadata =
+    typeof options.metadata === "function"
+      ? (options.metadata as () => unknown)()
+      : options.metadata;
+  return summarizeForLog(metadata);
+}
+
+function logProbeSuccess(
+  logger: ForgeLogger,
+  label: string,
+  value: unknown,
+  level: DebugProbeLevel,
+  options: LogProbeOptions | undefined,
+): void {
+  if (!isProbeLevelEnabled(logger, level)) {
+    return;
+  }
+  const debugProbe: Record<string, unknown> = {
+    label,
+    value: summarizeForLog(value),
+  };
+  const metadata = resolveProbeMetadata(options);
+  if (metadata !== undefined) {
+    debugProbe.metadata = metadata;
+  }
+  logger[level]({ debugProbe });
+}
+
+function logProbeError(
+  logger: ForgeLogger,
+  label: string,
+  error: unknown,
+  level: DebugProbeLevel,
+  options: LogProbeOptions | undefined,
+): void {
+  if (!isProbeLevelEnabled(logger, level)) {
+    return;
+  }
+  const debugProbe: Record<string, unknown> = {
+    label,
+    error: buildErrorMetadata(logger, error),
+  };
+  const metadata = resolveProbeMetadata(options);
+  if (metadata !== undefined) {
+    debugProbe.metadata = metadata;
+  }
+  logger[level]({ debugProbe });
+}
+
+export function logProbe<T>(
+  logger: ForgeLogger,
+  label: string,
+  valueOrThunk: T | (() => T),
+  options?: LogProbeOptions,
+): T {
+  const level = options?.level ?? "debug";
+  let result: T;
+  try {
+    result =
+      typeof valueOrThunk === "function"
+        ? (valueOrThunk as () => T)()
+        : valueOrThunk;
+  } catch (thrown) {
+    logProbeError(logger, label, thrown, level, options);
+    throw thrown;
+  }
+  if (isPromiseLike(result)) {
+    return result.then(
+      (fulfilled) => {
+        logProbeSuccess(logger, label, fulfilled, level, options);
+        return fulfilled;
+      },
+      (rejected) => {
+        logProbeError(logger, label, rejected, level, options);
+        throw rejected;
+      },
+    ) as T;
+  }
+  logProbeSuccess(logger, label, result, level, options);
+  return result;
+}
+
 export type LogMethod = (
   obj: Record<string, unknown>,
   message?: string,
@@ -581,6 +691,11 @@ export interface ForgeLogger {
     options?: LogResultOptions<T, E>,
   ): void;
   errorResult(error: unknown, options?: LogErrorOptions): void;
+  probe<T>(
+    label: string,
+    valueOrThunk: T | (() => T),
+    options?: LogProbeOptions,
+  ): T;
 }
 
 const underlyingPinoLoggers = new WeakMap<ForgeLogger, pino.Logger>();
@@ -598,6 +713,8 @@ function wrapPinoLogger(pinoLogger: pino.Logger): ForgeLogger {
       logForgeInvocation(forgeLogger, event, message, options),
     result: (result, options) => logResult(forgeLogger, result, options),
     errorResult: (error, options) => logError(forgeLogger, error, options),
+    probe: (label, valueOrThunk, options) =>
+      logProbe(forgeLogger, label, valueOrThunk, options),
   };
   underlyingPinoLoggers.set(forgeLogger, pinoLogger);
   return forgeLogger;

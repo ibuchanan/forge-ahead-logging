@@ -236,6 +236,65 @@ traces are included only when the logger's effective level is `debug` or
 `trace`. `logger.result(result, options)` and
 `logger.errorResult(error, options)` are the equivalent logger methods.
 
+## Debug Probe
+
+A Debug Probe is a pass-through logging convenience for wrapping a value or
+an application expression: it returns the original value (or preserves the
+original async fulfillment/rejection), while emitting a bounded, namespaced
+log record as a side effect. It only ever logs at `debug` or `trace`, never
+at the package's default `info` level, so it is safe to leave in code without
+a separate cleanup pass:
+
+```ts
+import { logProbe } from "@forge-ahead/logging";
+
+const total = logProbe(logger, "cartTotal", computeTotal(cart));
+// pass-through: `total` is exactly computeTotal(cart)'s return value
+
+const user = await logProbe(logger, "fetchUser", () => fetchUser(id));
+// pass-through: fulfills with the resolved user, or rethrows the same
+// rejection — either way, one debugProbe record is logged after settling
+```
+
+Successful probes log `{ debugProbe: { label, value } }`, where `value` is
+produced with `summarizeForLog()`. Rejected async work or a probe thunk that
+throws synchronously logs `{ debugProbe: { label, error } }` instead, using
+the same approved Problem Details-style error fields as `logResult()`/
+`logError()`, and still rethrows or rejects for the caller — a probe never
+swallows an error, it only adds a log record alongside it.
+
+A caller-supplied label is required, and probes accept one value at a time —
+pass an object when inspecting several values together. Pass a thunk
+(`() => expression`) rather than a bare value when the expression might throw
+synchronously, so the probe can log the failure before rethrowing it:
+
+```ts
+logProbe(logger, "cartTotal", computeTotal(cart), { level: "trace" });
+
+logProbe(logger, "cartTotal", computeTotal(cart), {
+  metadata: { cartId: cart.id },
+});
+
+logProbe(logger, "cartTotal", computeTotal(cart), {
+  metadata: () => ({ cartId: cart.id }), // computed only if the level is enabled
+});
+```
+
+`metadata` may be a plain value or a zero-argument function; when it's a
+function it is only called if the requested probe level is enabled, so
+expensive probe-only diagnostics don't run in production. The probed value or
+thunk itself always runs regardless of level — a probe never makes
+application behavior conditional on logging.
+
+`logger.probe(label, valueOrThunk, options?)` is the equivalent logger
+method, including on `child()` loggers, where emitted records carry the
+child's bindings.
+
+Debug Probe is a development-time convenience, distinct from Demo Narrative
+Logging: a probe wraps real application code and preserves its behavior,
+while Demo Narrative Logging is example-only storytelling with no
+pass-through value.
+
 ## API Surface
 
 - `createForgeLogger(options?)` returns a `ForgeLogger`; `unwrapPinoLogger(logger)`
@@ -256,6 +315,8 @@ traces are included only when the logger's effective level is `debug` or
 - `logResult(logger, result, options?)`, `logError(logger, error, options?)`,
   `logger.result(...)`, and `logger.errorResult(...)` cover Result/Error logging,
   integrated with `@forge-ahead/errors`.
+- `logProbe(logger, label, valueOrThunk, options?)` and `logger.probe(...)`
+  implement Debug Probe.
 
 ## Development
 
