@@ -36,7 +36,7 @@
     "pino": "*"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.2",
+    "@biomejs/biome": "2.5.3",
     "@types/node": "22",
     "tsdown": "^0.22",
     "typescript": "^5.9",
