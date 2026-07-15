@@ -427,6 +427,10 @@ export interface ForgeInvocationLogOptions extends LogValueSummaryOptions {
   includeEventShape?: boolean;
 }
 
+function isVerboseLevelEnabled(logger: ForgeLogger): boolean {
+  return unwrapPinoLogger(logger).isLevelEnabled("debug");
+}
+
 export function logForgeInvocation(
   logger: ForgeLogger,
   event: unknown,
@@ -435,7 +439,7 @@ export function logForgeInvocation(
 ): void {
   const summary = summarizeForgeInvocation(event, options);
   if (options?.includeEventShape) {
-    if (unwrapPinoLogger(logger).isLevelEnabled("debug")) {
+    if (isVerboseLevelEnabled(logger)) {
       summary.eventShape = summarizeForLog(event, options);
     } else {
       summary.eventShapeOmitted = "requires debug or trace";
@@ -472,6 +476,22 @@ function approvedProblemFields(
   return approved;
 }
 
+function buildErrorMetadata(
+  logger: ForgeLogger,
+  error: unknown,
+  status?: number,
+): Record<string, unknown> {
+  const problemDetails = toProblemDetails(error, status ?? 500);
+  const metadata = approvedProblemFields(problemDetails);
+  if (error instanceof Error) {
+    metadata.errorName = error.name;
+    if (error.stack && isVerboseLevelEnabled(logger)) {
+      metadata.stack = error.stack;
+    }
+  }
+  return metadata;
+}
+
 export function logResult<T, E = ProblemDetails>(
   logger: ForgeLogger,
   result: Result<T, E>,
@@ -487,17 +507,7 @@ export function logResult<T, E = ProblemDetails>(
     return;
   }
   const level = options?.errorLevel ?? "error";
-  const problemDetails = toProblemDetails(result.error);
-  const metadata = approvedProblemFields(problemDetails);
-  if (result.error instanceof Error) {
-    metadata.errorName = result.error.name;
-    if (
-      result.error.stack &&
-      unwrapPinoLogger(logger).isLevelEnabled("debug")
-    ) {
-      metadata.stack = result.error.stack;
-    }
-  }
+  const metadata = buildErrorMetadata(logger, result.error);
   if (options?.summarizeErr) {
     Object.assign(metadata, options.summarizeErr(result.error));
   }
@@ -516,14 +526,7 @@ export function logError(
   options?: LogErrorOptions,
 ): void {
   const level = options?.level ?? "error";
-  const problemDetails = toProblemDetails(error, options?.status ?? 500);
-  const metadata = approvedProblemFields(problemDetails);
-  if (error instanceof Error) {
-    metadata.errorName = error.name;
-    if (error.stack && unwrapPinoLogger(logger).isLevelEnabled("debug")) {
-      metadata.stack = error.stack;
-    }
-  }
+  const metadata = buildErrorMetadata(logger, error, options?.status);
   logger[level](metadata, options?.message);
 }
 
