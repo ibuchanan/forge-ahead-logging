@@ -197,51 +197,69 @@ function summarizeValue(
     return `[bigint ${value.toString()}]`;
   }
   if (typeof value === "string") {
-    if (value.length > options.maxStringLength) {
-      const omitted = value.length - options.maxStringLength;
-      return `${value.slice(0, options.maxStringLength)}...[${omitted} chars omitted]`;
-    }
-    return value;
+    return summarizeString(value, options.maxStringLength);
   }
-  if (
-    depth >= options.maxDepth &&
-    (Array.isArray(value) || typeof value === "object")
-  ) {
+  // Every other typeof category already returned above, so value is
+  // necessarily an array or plain object from here on.
+  if (depth >= options.maxDepth) {
     return "[max depth reached]";
   }
-  if (Array.isArray(value)) {
-    if (seen.has(value)) {
-      return "[circular]";
-    }
-    const nextSeen = new Set(seen).add(value);
-    const items = value
-      .slice(0, options.maxArrayItems)
-      .map((item) => summarizeValue(item, options, depth + 1, nextSeen));
-    const omittedCount = value.length - options.maxArrayItems;
-    if (omittedCount > 0) {
-      items.push(`[${omittedCount} more items omitted]`);
-    }
-    return items;
+  if (seen.has(value)) {
+    return "[circular]";
   }
-  if (typeof value === "object") {
-    if (seen.has(value)) {
-      return "[circular]";
-    }
-    const nextSeen = new Set(seen).add(value);
-    const entries = Object.entries(value as Record<string, unknown>);
-    const summary: { [key: string]: JSONValue } = {};
-    for (const [key, entryValue] of entries.slice(0, options.maxObjectKeys)) {
-      summary[key] = isSecretShapedKey(key, options.redactedKeys)
-        ? DEFAULT_REDACTION_CENSOR
-        : summarizeValue(entryValue, options, depth + 1, nextSeen);
-    }
-    const omittedCount = entries.length - options.maxObjectKeys;
-    if (omittedCount > 0) {
-      summary[`[${omittedCount} more keys omitted]`] = true;
-    }
-    return summary;
+  const nextSeen = new Set(seen).add(value);
+  return Array.isArray(value)
+    ? summarizeArray(value, options, depth, nextSeen)
+    : summarizeObject(
+        value as Record<string, unknown>,
+        options,
+        depth,
+        nextSeen,
+      );
+}
+
+function summarizeString(value: string, maxLength: number): string {
+  if (value.length <= maxLength) {
+    return value;
   }
-  return null;
+  const omitted = value.length - maxLength;
+  return `${value.slice(0, maxLength)}...[${omitted} chars omitted]`;
+}
+
+function summarizeArray(
+  value: readonly unknown[],
+  options: Required<LogValueSummaryOptions>,
+  depth: number,
+  seen: ReadonlySet<unknown>,
+): JSONValue[] {
+  const items = value
+    .slice(0, options.maxArrayItems)
+    .map((item) => summarizeValue(item, options, depth + 1, seen));
+  const omittedCount = value.length - options.maxArrayItems;
+  if (omittedCount > 0) {
+    items.push(`[${omittedCount} more items omitted]`);
+  }
+  return items;
+}
+
+function summarizeObject(
+  value: Record<string, unknown>,
+  options: Required<LogValueSummaryOptions>,
+  depth: number,
+  seen: ReadonlySet<unknown>,
+): { [key: string]: JSONValue } {
+  const entries = Object.entries(value);
+  const summary: { [key: string]: JSONValue } = {};
+  for (const [key, entryValue] of entries.slice(0, options.maxObjectKeys)) {
+    summary[key] = isSecretShapedKey(key, options.redactedKeys)
+      ? DEFAULT_REDACTION_CENSOR
+      : summarizeValue(entryValue, options, depth + 1, seen);
+  }
+  const omittedCount = entries.length - options.maxObjectKeys;
+  if (omittedCount > 0) {
+    summary[`[${omittedCount} more keys omitted]`] = true;
+  }
+  return summary;
 }
 
 export type LogFieldPath = string | readonly string[];
@@ -298,6 +316,9 @@ function getAtPath(
   return { found: true, value: current };
 }
 
+// A named type guard, not an inline condition: TypeScript can't narrow
+// `readonly string[]` out of the LogFieldSelection union via Array.isArray()
+// in an else-branch, so the exclusion has to be asserted explicitly here.
 function hasFieldSelectionPath(
   selection: LogFieldSelection,
 ): selection is { path: LogFieldPath; transform?: LogFieldTransform } {
