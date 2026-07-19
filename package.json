@@ -36,12 +36,17 @@
     "test:watch": "vitest watch",
     "typecheck": "tsc --noEmit"
   },
+  "overrides": {
+    "rolldown-plugin-dts": {
+      "yuku-parser": "0.6.3"
+    }
+  },
   "dependencies": {
     "@forge-ahead/errors": "github:ibuchanan/forge-ahead-errors",
     "pino": "^10.3"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.3",
+    "@biomejs/biome": "2.5.4",
     "@types/node": "22",
     "@vitest/coverage-v8": "^4.1.10",
     "tsdown": "^0.22",
