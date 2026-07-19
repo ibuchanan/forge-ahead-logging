@@ -30,7 +30,7 @@
     "lint": "lefthook run lint",
     "lint:check": "biome lint",
     "lint:fix": "biome lint --write",
-    "prepare": "lefthook install",
+    "prepare": "npm run build && (lefthook install || true)",
     "release:prepare": "scripts/release-prepare.sh",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
