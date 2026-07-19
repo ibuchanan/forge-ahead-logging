@@ -1,3 +1,17 @@
+## [0.2.1] - 2026-07-19
+
+### 🐛 Bug Fixes
+
+- *(build)* Stabilize install-time build
+
+### 💼 Other
+
+- Ensure build runs in prepare hook
+
+### ⚙️ Miscellaneous Tasks
+
+- Regenerate CHANGELOG.md and update project hooks
+
 ## [unreleased]
 
 ### 🐛 Bug Fixes
