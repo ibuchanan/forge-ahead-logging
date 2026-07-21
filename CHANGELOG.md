@@ -2,7 +2,7 @@
 
 ### 🐛 Bug Fixes
 
-- *(build)* Stabilize install-time build
+- _(build)_ Stabilize install-time build
 
 ### 💼 Other
 
@@ -11,12 +11,6 @@
 ### ⚙️ Miscellaneous Tasks
 
 - Regenerate CHANGELOG.md and update project hooks
-
-## [unreleased]
-
-### 🐛 Bug Fixes
-
-- *(build)* Stabilize install-time build
 
 ## [0.2.0] - 2026-07-15
 
@@ -31,7 +25,7 @@
 
 ### ⚙️ Miscellaneous Tasks
 
-- *(release)* V0.2.0
+- _(release)_ V0.2.0
 
 ## [0.1.0] - 2026-07-15
 
@@ -73,5 +67,4 @@
 - Bump Biome to 2.5.3
 - Add Vitest V8 coverage provider
 - Pin dependency versions
-- *(release)* Release v0.1.0
-
+- _(release)_ Release v0.1.0

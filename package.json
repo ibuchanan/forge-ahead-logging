@@ -17,7 +17,8 @@
   "main": "dist/index.mjs",
   "types": "dist/index.d.mts",
   "files": [
-    "dist"
+    "dist",
+    "demo/package.json"
   ],
   "scripts": {
     "build": "tsdown",
