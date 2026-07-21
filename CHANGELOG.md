@@ -1,3 +1,9 @@
+## [0.2.2] - 2026-07-21
+
+### 🐛 Bug Fixes
+
+- *(exports)* Resolve ./demo subpath under classic TS resolution
+
 ## [0.2.1] - 2026-07-19
 
 ### 🐛 Bug Fixes
