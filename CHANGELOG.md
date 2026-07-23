@@ -1,3 +1,9 @@
+## [0.2.3] - 2026-07-23
+
+### 🐛 Bug Fixes
+
+- *(exports)* Add CJS build output for require() consumers
+
 ## [0.2.2] - 2026-07-21
 
 ### 🐛 Bug Fixes
