@@ -1,3 +1,9 @@
+## [0.2.4] - 2026-07-23
+
+### 🐛 Bug Fixes
+
+- *(logger)* Force synchronous pino destination to prevent dropped logs
+
 ## [0.2.3] - 2026-07-23
 
 ### 🐛 Bug Fixes
