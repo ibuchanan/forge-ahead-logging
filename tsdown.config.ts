@@ -5,7 +5,7 @@ export default defineConfig({
     index: "./src/index.ts",
     demo: "./src/demo.ts",
   },
-  format: ["esm"],
+  format: ["esm", "cjs"],
   sourcemap: true,
   target: "node22",
 });
