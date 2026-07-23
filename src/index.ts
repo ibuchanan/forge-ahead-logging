@@ -728,13 +728,48 @@ export function unwrapPinoLogger(logger: ForgeLogger): pino.Logger {
   return pinoLogger;
 }
 
-// Forge freezes the process between invocations instead of exiting it, so
-// pino's default async destination (flush-on-exit) can drop buffered writes
-// that haven't flushed by the time an invocation's promise resolves. A
-// synchronous destination avoids that loss; low log volume in Forge apps
-// keeps the blocking-write cost negligible.
+const CONSOLE_METHOD_BY_LEVEL_LABEL: Readonly<
+  Record<string, "error" | "warn" | "info" | "debug">
+> = {
+  fatal: "error",
+  error: "error",
+  warn: "warn",
+  info: "info",
+  debug: "debug",
+  trace: "debug",
+};
+
+function consoleMethodForLevel(
+  levelNumber: number,
+): "error" | "warn" | "info" | "debug" {
+  const label = pino.levels.labels[levelNumber];
+  return CONSOLE_METHOD_BY_LEVEL_LABEL[label] ?? "info";
+}
+
+interface ForgeDestination extends pino.DestinationStream {
+  lastLevel: number;
+}
+
+// `forge logs` captures output by intercepting the platform's `console.*`
+// methods, the way Forge's own docs instruct apps to log -- it does not tail
+// the process's raw stdout file descriptor. A synchronous SonicBoom
+// destination writes bytes straight to fd 1, which never reaches Forge's log
+// capture regardless of sync vs. async. Opting into pino's metadata contract
+// (the `needsMetadataGsym` symbol) makes pino set `lastLevel` on this object
+// immediately before each `write()` call, so every line can be dispatched to
+// the console method matching its severity.
 function createForgeDestination(): pino.DestinationStream {
-  return pino.destination({ dest: 1, sync: true });
+  const destination: ForgeDestination = {
+    lastLevel: pino.levels.values.info,
+    write(chunk: string): void {
+      const line = chunk.endsWith("\n") ? chunk.slice(0, -1) : chunk;
+      console[consoleMethodForLevel(destination.lastLevel)](line);
+    },
+  };
+  (destination as unknown as Record<symbol, boolean>)[
+    pino.symbols.needsMetadataGsym
+  ] = true;
+  return destination;
 }
 
 export function createForgeLogger(

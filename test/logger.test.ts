@@ -1,5 +1,5 @@
 import pino from "pino";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createForgeLogger, unwrapPinoLogger } from "../src/index";
 import { captureForgeLoggerOutput } from "./helpers/capture-forge-logger-output";
 
@@ -76,15 +76,18 @@ describe("createForgeLogger", () => {
     expect(record.requestId).toBe("req-123");
   });
 
-  it("uses a synchronous destination so writes aren't dropped when a Forge invocation freezes before pino's exit-flush fires", () => {
-    const logger = createForgeLogger({ env: {} });
+  it("dispatches each record to the console method matching its severity, since forge logs reads console.* rather than raw fd writes", () => {
+    const logger = createForgeLogger({ env: { LOG_LEVEL: "debug" } });
 
-    const pinoLogger = unwrapPinoLogger(logger) as unknown as Record<
-      symbol,
-      { sync?: boolean }
-    >;
+    logger.error({}, "an error");
+    logger.warn({}, "a warning");
+    logger.info({}, "some info");
+    logger.debug({}, "some debug");
 
-    expect(pinoLogger[pino.symbols.streamSym].sync).toBe(true);
+    expect(vi.mocked(console.error)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(console.warn)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(console.info)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(console.debug)).toHaveBeenCalledTimes(1);
   });
 
   it("unwraps to the live underlying pino logger", () => {

@@ -1,11 +1,10 @@
-import fs from "node:fs";
 import { afterEach, beforeEach, vi } from "vitest";
 
-const STDOUT_FD = 1;
+const CAPTURED_CONSOLE_METHODS = ["error", "warn", "info", "debug"] as const;
 
 /**
- * createForgeLogger() writes via a synchronous SonicBoom destination on fd 1,
- * which calls fs.writeSync() directly rather than process.stdout.write(), so
+ * createForgeLogger() writes by dispatching each line to console.error/warn/
+ * info/debug (Forge's log capture reads console.*, not raw fd writes), so
  * that's the layer this helper has to intercept to observe emitted records.
  */
 export function captureForgeLoggerOutput(): {
@@ -15,12 +14,11 @@ export function captureForgeLoggerOutput(): {
 
   beforeEach(() => {
     writtenLines = [];
-    vi.spyOn(fs, "writeSync").mockImplementation((fd, buffer) => {
-      if (fd === STDOUT_FD) {
-        writtenLines.push(String(buffer));
-      }
-      return String(buffer).length;
-    });
+    for (const method of CAPTURED_CONSOLE_METHODS) {
+      vi.spyOn(console, method).mockImplementation((line: string) => {
+        writtenLines.push(line);
+      });
+    }
   });
 
   afterEach(() => {
@@ -28,11 +26,6 @@ export function captureForgeLoggerOutput(): {
   });
 
   return {
-    loggedRecords: () =>
-      writtenLines
-        .join("")
-        .split("\n")
-        .filter((line) => line.length > 0)
-        .map((line) => JSON.parse(line)),
+    loggedRecords: () => writtenLines.map((line) => JSON.parse(line)),
   };
 }
