@@ -728,16 +728,28 @@ export function unwrapPinoLogger(logger: ForgeLogger): pino.Logger {
   return pinoLogger;
 }
 
+// Forge freezes the process between invocations instead of exiting it, so
+// pino's default async destination (flush-on-exit) can drop buffered writes
+// that haven't flushed by the time an invocation's promise resolves. A
+// synchronous destination avoids that loss; low log volume in Forge apps
+// keeps the blocking-write cost negligible.
+function createForgeDestination(): pino.DestinationStream {
+  return pino.destination({ dest: 1, sync: true });
+}
+
 export function createForgeLogger(
   options: ForgeLoggerOptions = {},
 ): ForgeLogger {
   const env = options.env ?? process.env;
   const { level } = resolveLogLevel(env);
-  const pinoLogger = pino({
-    level,
-    name: options.name,
-    base: options.base ?? {},
-    redact: withDefaultRedaction(options.redact),
-  });
+  const pinoLogger = pino(
+    {
+      level,
+      name: options.name,
+      base: options.base ?? {},
+      redact: withDefaultRedaction(options.redact),
+    },
+    createForgeDestination(),
+  );
   return wrapPinoLogger(pinoLogger);
 }

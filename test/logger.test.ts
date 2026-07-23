@@ -76,6 +76,17 @@ describe("createForgeLogger", () => {
     expect(record.requestId).toBe("req-123");
   });
 
+  it("uses a synchronous destination so writes aren't dropped when a Forge invocation freezes before pino's exit-flush fires", () => {
+    const logger = createForgeLogger({ env: {} });
+
+    const pinoLogger = unwrapPinoLogger(logger) as unknown as Record<
+      symbol,
+      { sync?: boolean }
+    >;
+
+    expect(pinoLogger[pino.symbols.streamSym].sync).toBe(true);
+  });
+
   it("unwraps to the live underlying pino logger", () => {
     const logger = createForgeLogger({ env: {}, name: "unwrapped-service" });
 
