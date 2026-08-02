@@ -74,6 +74,53 @@ describe("createForgeLogger", () => {
     expect(record.requestId).toBe("req-123");
   });
 
+  it("accepts a message-only call equivalent to an empty metadata object", () => {
+    const { logger, records } = createCapturingLogger();
+
+    logger.info("hello");
+
+    const [record] = records;
+    expect(record.msg).toBe("hello");
+    expect(record.level).toBe("info");
+  });
+
+  it("keeps the explicit message when metadata also contains a msg key", () => {
+    const { logger, records } = createCapturingLogger();
+
+    logger.info({ msg: "from object", foo: "bar" }, "from argument");
+
+    const [record] = records;
+    expect(record.msg).toBe("from argument");
+    expect(record.foo).toBe("bar");
+  });
+
+  it("supports message-only calls on all seven level methods", () => {
+    const { logger, records } = createCapturingLogger({
+      env: { LOG_LEVEL: "trace" },
+    });
+
+    logger.fatal("fatal msg");
+    logger.error("error msg");
+    logger.warn("warn msg");
+    logger.info("info msg");
+    logger.debug("debug msg");
+    logger.trace("trace msg");
+
+    expect(records).toHaveLength(6);
+    expect(records[0].msg).toBe("fatal msg");
+    expect(records[0].level).toBe("fatal");
+    expect(records[1].msg).toBe("error msg");
+    expect(records[1].level).toBe("error");
+    expect(records[2].msg).toBe("warn msg");
+    expect(records[2].level).toBe("warn");
+    expect(records[3].msg).toBe("info msg");
+    expect(records[3].level).toBe("info");
+    expect(records[4].msg).toBe("debug msg");
+    expect(records[4].level).toBe("debug");
+    expect(records[5].msg).toBe("trace msg");
+    expect(records[5].level).toBe("trace");
+  });
+
   it("dispatches each record to the console method matching its severity, since forge logs reads console.* rather than raw fd writes", () => {
     const consoleSpies = ["error", "warn", "info", "debug"] as const;
     const spies = consoleSpies.map((method) =>

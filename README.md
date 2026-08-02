@@ -70,8 +70,17 @@ logger.info({ userId: "abc-123" }, "handled request");
 
 Level methods (`fatal`, `error`, `warn`, `info`, `debug`, `trace`) are
 object-first: pass a metadata object as the first argument, using `{}` when
-there is no metadata to attach. This package's `ForgeLogger` does not expose
-pino's string-only call shape.
+there is no metadata to attach. A message-only call is also supported when
+there is no metadata:
+
+```ts
+log.info("handled request");
+// equivalent to: log.info({}, "handled request")
+```
+
+Object-first remains the recommended shape for production code; the
+message-only form is a convenience for simple cases. This package's
+`ForgeLogger` does not expose pino's string-interpolation call shape.
 
 ## `LOG_LEVEL`
 

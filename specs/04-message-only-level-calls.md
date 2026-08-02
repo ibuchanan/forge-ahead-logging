@@ -6,7 +6,7 @@
 
 **Status:** ready-for-agent
 
-- [ ] `logger.info("msg")` and `logger.info({ a: 1 }, "msg")` both type-check and emit equivalent records apart from metadata.
-- [ ] Object-first calls remain the documented and recommended shape.
-- [ ] A metadata object that already contains a `msg` key does not collide with the message argument.
-- [ ] All seven level methods (`fatal` through `trace`) support the message-only form.
+- [x] `logger.info("msg")` and `logger.info({ a: 1 }, "msg")` both type-check and emit equivalent records apart from metadata.
+- [x] Object-first calls remain the documented and recommended shape.
+- [x] A metadata object that already contains a `msg` key does not collide with the message argument.
+- [x] All seven level methods (`fatal` through `trace`) support the message-only form.

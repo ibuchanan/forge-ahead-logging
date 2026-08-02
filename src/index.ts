@@ -662,7 +662,7 @@ export function logProbe<T>(
 }
 
 export type LogMethod = (
-  obj: Record<string, unknown>,
+  obj: Record<string, unknown> | string,
   message?: string,
 ) => void;
 
