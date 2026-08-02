@@ -6,8 +6,8 @@
 
 **Status:** ready-for-agent
 
-- [ ] A three-deep `error.cause` chain logs three bounded links, each containing approved Problem Details fields.
-- [ ] A cyclic `error.cause` chain terminates instead of looping forever.
-- [ ] `AggregateError.errors` is summarized as a bounded array of normalized error records.
-- [ ] Emitted stack traces have a documented upper frame count and include a `[N frames omitted]` marker when truncated.
-- [ ] The existing debug/trace gate for stacks is preserved; no local-variable diagnostics are captured.
+- [x] A three-deep `error.cause` chain logs three bounded links, each containing approved Problem Details fields.
+- [x] A cyclic `error.cause` chain terminates instead of looping forever.
+- [x] `AggregateError.errors` is summarized as a bounded array of normalized error records.
+- [x] Emitted stack traces have a documented upper frame count and include a `[N frames omitted]` marker when truncated.
+- [x] The existing debug/trace gate for stacks is preserved; no local-variable diagnostics are captured.

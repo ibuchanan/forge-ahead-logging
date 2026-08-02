@@ -635,7 +635,22 @@ function approvedProblemFields(
   return approved;
 }
 
-function buildErrorMetadata(
+const MAX_STACK_FRAMES = 8;
+const MAX_CAUSE_DEPTH = 3;
+const MAX_AGGREGATE_ERRORS = 3;
+
+function truncateStack(stack: string): string {
+  const lines = stack.split("\n");
+  const frames = lines.slice(1);
+  if (frames.length <= MAX_STACK_FRAMES) {
+    return stack;
+  }
+  const kept = frames.slice(0, MAX_STACK_FRAMES);
+  const omitted = frames.length - MAX_STACK_FRAMES;
+  return [lines[0], ...kept, `... ${omitted} frames omitted`].join("\n");
+}
+
+function buildErrorMetadataSummary(
   logger: ForgeLogger,
   error: unknown,
   status?: number,
@@ -645,9 +660,48 @@ function buildErrorMetadata(
   if (error instanceof Error) {
     metadata.errorName = error.name;
     if (error.stack && isVerboseLevelEnabled(logger)) {
-      metadata.stack = error.stack;
+      metadata.stack = truncateStack(error.stack);
     }
   }
+  return metadata;
+}
+
+function buildErrorMetadata(
+  logger: ForgeLogger,
+  error: unknown,
+  status?: number,
+): Record<string, unknown> {
+  const metadata = buildErrorMetadataSummary(logger, error, status);
+
+  if (
+    error instanceof Error &&
+    error.cause !== undefined &&
+    error.cause !== null
+  ) {
+    const visited = new Set<unknown>();
+    const causes: unknown[] = [];
+    let current: unknown = error.cause;
+    while (
+      causes.length < MAX_CAUSE_DEPTH &&
+      current !== undefined &&
+      current !== null
+    ) {
+      if (visited.has(current)) {
+        break;
+      }
+      visited.add(current);
+      causes.push(buildErrorMetadataSummary(logger, current, status));
+      current = (current as Error).cause;
+    }
+    metadata.causes = causes;
+  }
+
+  if (error instanceof AggregateError) {
+    metadata.errors = error.errors
+      .slice(0, MAX_AGGREGATE_ERRORS)
+      .map((nested) => buildErrorMetadataSummary(logger, nested, status));
+  }
+
   return metadata;
 }
 

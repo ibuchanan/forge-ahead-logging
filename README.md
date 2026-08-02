@@ -327,8 +327,14 @@ try {
 
 Non-`ProblemDetails` `Error` instances also get an `errorName` field. Stack
 traces are included only when the logger's effective level is `debug` or
-`trace`. `logger.result(result, options)` and
-`logger.errorResult(error, options)` are the equivalent logger methods.
+`trace`, and they are truncated to a bounded frame count with a visible
+`[N frames omitted]` marker.
+
+`error.cause` chains are logged as a bounded `causes` array of normalized error
+records, and `AggregateError.errors` is summarized as a bounded `errors`
+array. Cycles are detected and terminate the chain. `logger.result(result,
+options)` and `logger.errorResult(error, options)` are the equivalent logger
+methods.
 
 ## Debug Probe
 

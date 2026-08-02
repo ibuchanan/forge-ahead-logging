@@ -81,7 +81,8 @@ describe("logResult err branch", () => {
     logResult(logger, err(error));
 
     const [record] = records;
-    expect(record.stack).toBe(error.stack);
+    expect(record.stack).toContain("TypeError: bad input");
+    expect(record.stack).toContain("frames omitted");
   });
 
   it("merges summarizeErr metadata alongside approved ProblemDetails fields", () => {
@@ -125,7 +126,8 @@ describe("logError", () => {
     expect(infoRecord.errorName).toBe("RangeError");
     expect(infoRecord.stack).toBeUndefined();
     expect(debugRecord.errorName).toBe("RangeError");
-    expect(debugRecord.stack).toBe(error.stack);
+    expect(debugRecord.stack).toContain("RangeError: out of bounds");
+    expect(debugRecord.stack).toContain("frames omitted");
   });
 
   it("logs only approved fields for an existing ProblemDetails", () => {
@@ -174,5 +176,94 @@ describe("logger.result and logger.errorResult", () => {
     expect(record.level).toBe("error");
     expect(record.status).toBe(500);
     expect(record.detail).toBe("boom");
+  });
+});
+
+describe("bounded error cause chains", () => {
+  it("logs up to three bounded cause links", () => {
+    const { logger, records } = createCapturingLogger({ env: {} });
+    const root = new Error("root");
+    const cause1 = new Error("cause1");
+    const cause2 = new Error("cause2");
+    const cause3 = new Error("cause3");
+    root.cause = cause1;
+    cause1.cause = cause2;
+    cause2.cause = cause3;
+
+    logError(logger, root);
+
+    const [record] = records;
+    const causes = record.causes as Array<Record<string, unknown>>;
+    expect(causes).toHaveLength(3);
+    expect(causes).toEqual([
+      expect.objectContaining({ detail: "cause1", errorName: "Error" }),
+      expect.objectContaining({ detail: "cause2", errorName: "Error" }),
+      expect.objectContaining({ detail: "cause3", errorName: "Error" }),
+    ]);
+    expect(causes[0].status).toBe(500);
+    expect(causes[0].title).toBe("Internal Server Error");
+  });
+
+  it("stops before a cyclic cause chain", () => {
+    const { logger, records } = createCapturingLogger({ env: {} });
+    const a = new Error("a");
+    const b = new Error("b");
+    a.cause = b;
+    b.cause = a;
+
+    logError(logger, a);
+
+    const [record] = records;
+    const causes = record.causes as Array<Record<string, unknown>>;
+    expect(causes).toHaveLength(2);
+    expect(causes[0].detail).toBe("b");
+    expect(causes[1].detail).toBe("a");
+  });
+});
+
+describe("AggregateError summary", () => {
+  it("summarizes AggregateError.errors as a bounded array of normalized records", () => {
+    const { logger, records } = createCapturingLogger({ env: {} });
+    const aggregate = new AggregateError(
+      [
+        new Error("one"),
+        new Error("two"),
+        new Error("three"),
+        new Error("four"),
+      ],
+      "multiple failures",
+    );
+
+    logError(logger, aggregate);
+
+    const [record] = records;
+    expect(record.errorName).toBe("AggregateError");
+    expect(record.errors).toHaveLength(3);
+    expect(record.errors).toEqual([
+      expect.objectContaining({ detail: "one", errorName: "Error" }),
+      expect.objectContaining({ detail: "two", errorName: "Error" }),
+      expect.objectContaining({ detail: "three", errorName: "Error" }),
+    ]);
+  });
+});
+
+describe("bounded stack traces", () => {
+  it("truncates a stack trace to a bounded frame count with a marker", () => {
+    const { logger, records } = createCapturingLogger({
+      env: { LOG_LEVEL: "debug" },
+    });
+    function deepStack(depth: number): Error {
+      if (depth <= 1) return new Error("deep");
+      return deepStack(depth - 1);
+    }
+    const error = deepStack(20);
+
+    logError(logger, error);
+
+    const [record] = records;
+    const lines = (record.stack as string).split("\n");
+    const marker = lines.find((line) => line.includes("frames omitted"));
+    expect(marker).toBeDefined();
+    expect(lines.length).toBeLessThan(20);
   });
 });
