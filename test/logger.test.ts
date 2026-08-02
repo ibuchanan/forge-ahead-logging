@@ -121,6 +121,55 @@ describe("createForgeLogger", () => {
     expect(records[5].level).toBe("trace");
   });
 
+  it("does not invoke a metadata thunk when the level is disabled", () => {
+    const { logger, records } = createCapturingLogger();
+    const thunk = vi.fn(() => ({ expensive: true }));
+
+    logger.debug(thunk, "quiet");
+
+    expect(thunk).not.toHaveBeenCalled();
+    expect(records).toHaveLength(0);
+  });
+
+  it("invokes a metadata thunk and emits the result when the level is enabled", () => {
+    const { logger, records } = createCapturingLogger({
+      env: { LOG_LEVEL: "debug" },
+    });
+
+    logger.debug(() => ({ expensive: true }), "loud");
+
+    expect(records).toHaveLength(1);
+    expect(records[0].msg).toBe("loud");
+    expect(records[0].expensive).toBe(true);
+  });
+
+  it("exposes isLevelEnabled for all seven levels", () => {
+    const { logger } = createCapturingLogger({ env: { LOG_LEVEL: "info" } });
+
+    expect(logger.isLevelEnabled("fatal")).toBe(true);
+    expect(logger.isLevelEnabled("error")).toBe(true);
+    expect(logger.isLevelEnabled("warn")).toBe(true);
+    expect(logger.isLevelEnabled("info")).toBe(true);
+    expect(logger.isLevelEnabled("debug")).toBe(false);
+    expect(logger.isLevelEnabled("trace")).toBe(false);
+    expect(logger.isLevelEnabled("silent")).toBe(true);
+  });
+
+  it("propagates a metadata thunk that throws", () => {
+    const { logger, records } = createCapturingLogger({
+      env: { LOG_LEVEL: "debug" },
+    });
+    const failure = new Error("thunk boom");
+
+    expect(() =>
+      logger.debug(() => {
+        throw failure;
+      }, "never"),
+    ).toThrow(failure);
+
+    expect(records).toHaveLength(0);
+  });
+
   it("dispatches each record to the console method matching its severity, since forge logs reads console.* rather than raw fd writes", () => {
     const consoleSpies = ["error", "warn", "info", "debug"] as const;
     const spies = consoleSpies.map((method) =>

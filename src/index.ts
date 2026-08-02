@@ -662,7 +662,7 @@ export function logProbe<T>(
 }
 
 export type LogMethod = (
-  obj: Record<string, unknown> | string,
+  obj: Record<string, unknown> | string | (() => Record<string, unknown>),
   message?: string,
 ) => void;
 
@@ -680,6 +680,7 @@ export interface ForgeLogger {
   info: LogMethod;
   debug: LogMethod;
   trace: LogMethod;
+  isLevelEnabled(level: ForgeLogLevel): boolean;
   child(bindings: Record<string, unknown>): ForgeLogger;
   forgeInvocation(
     event: unknown,
@@ -700,14 +701,35 @@ export interface ForgeLogger {
 
 const underlyingPinoLoggers = new WeakMap<ForgeLogger, pino.Logger>();
 
+function resolveLogMethodArg(
+  obj: Record<string, unknown> | string | (() => Record<string, unknown>),
+  level: ForgeLogLevel,
+  pinoLogger: pino.Logger,
+): Record<string, unknown> | string {
+  if (typeof obj === "function") {
+    if (!pinoLogger.isLevelEnabled(level)) {
+      return {};
+    }
+    return obj();
+  }
+  return obj;
+}
+
 function wrapPinoLogger(pinoLogger: pino.Logger): ForgeLogger {
   const forgeLogger: ForgeLogger = {
-    fatal: (obj, message) => pinoLogger.fatal(obj, message),
-    error: (obj, message) => pinoLogger.error(obj, message),
-    warn: (obj, message) => pinoLogger.warn(obj, message),
-    info: (obj, message) => pinoLogger.info(obj, message),
-    debug: (obj, message) => pinoLogger.debug(obj, message),
-    trace: (obj, message) => pinoLogger.trace(obj, message),
+    fatal: (obj, message) =>
+      pinoLogger.fatal(resolveLogMethodArg(obj, "fatal", pinoLogger), message),
+    error: (obj, message) =>
+      pinoLogger.error(resolveLogMethodArg(obj, "error", pinoLogger), message),
+    warn: (obj, message) =>
+      pinoLogger.warn(resolveLogMethodArg(obj, "warn", pinoLogger), message),
+    info: (obj, message) =>
+      pinoLogger.info(resolveLogMethodArg(obj, "info", pinoLogger), message),
+    debug: (obj, message) =>
+      pinoLogger.debug(resolveLogMethodArg(obj, "debug", pinoLogger), message),
+    trace: (obj, message) =>
+      pinoLogger.trace(resolveLogMethodArg(obj, "trace", pinoLogger), message),
+    isLevelEnabled: (level) => pinoLogger.isLevelEnabled(level),
     child: (bindings) => wrapPinoLogger(pinoLogger.child(bindings)),
     forgeInvocation: (event, message, options) =>
       logForgeInvocation(forgeLogger, event, message, options),

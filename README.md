@@ -82,6 +82,26 @@ Object-first remains the recommended shape for production code; the
 message-only form is a convenience for simple cases. This package's
 `ForgeLogger` does not expose pino's string-interpolation call shape.
 
+### Lazy metadata
+
+The first argument may also be a zero-argument function that returns the
+metadata object. The function is only called when the requested level is
+enabled, so expensive diagnostics are skipped in production:
+
+```ts
+log.debug(
+  () => ({ queryPlan: expensiveExplain(), snapshot: buildSnapshot() }),
+  "computed diagnostic",
+);
+```
+
+If the level is disabled, the thunk never runs. If the level is enabled, the
+thunk result is logged the same way as a normal metadata object. A thunk that
+throws is propagated to the caller; no record is emitted.
+
+Use `logger.isLevelEnabled(level)` to branch explicitly when a thunk is not the
+right fit.
+
 ## `LOG_LEVEL`
 
 `createForgeLogger()` resolves its effective level in this order:
@@ -379,6 +399,8 @@ package.
 
 - `log` is the ready-to-use default `ForgeLogger`; use `createForgeLogger(options?)`
   for named loggers, custom redaction, or injected `env`.
+- Level methods accept object-first metadata, a message-only string, or a lazy
+  metadata thunk. `logger.isLevelEnabled(level)` checks whether a level is active.
 - `unwrapPinoLogger(logger)` exposes the underlying pino instance for interop.
 - `resolveLogLevel(env?)` and `getLogLevel(env?)` resolve `LOG_LEVEL`/`NODE_ENV`
   without logging as a side effect.
