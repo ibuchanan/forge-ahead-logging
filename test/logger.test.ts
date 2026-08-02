@@ -170,6 +170,39 @@ describe("createForgeLogger", () => {
     expect(records).toHaveLength(0);
   });
 
+  it("logs through a dynamic level method", () => {
+    const { logger, records } = createCapturingLogger({
+      env: { LOG_LEVEL: "debug" },
+    });
+
+    logger.log("info", { foo: "bar" }, "dynamic info");
+    logger.log("debug", { foo: "bar" }, "dynamic debug");
+
+    expect(records).toHaveLength(2);
+    expect(records[0].level).toBe("info");
+    expect(records[0].msg).toBe("dynamic info");
+    expect(records[1].level).toBe("debug");
+    expect(records[1].msg).toBe("dynamic debug");
+  });
+
+  it("does not emit when the dynamic level is disabled", () => {
+    const { logger, records } = createCapturingLogger();
+
+    logger.log("debug", { foo: "bar" }, "dynamic debug");
+
+    expect(records).toHaveLength(0);
+  });
+
+  it("does not emit for invalid dynamic levels", () => {
+    const { logger, records } = createCapturingLogger({
+      env: { LOG_LEVEL: "debug" },
+    });
+
+    logger.log("invalid" as "info", { foo: "bar" }, "invalid");
+
+    expect(records).toHaveLength(0);
+  });
+
   it("dispatches each record to the console method matching its severity, since forge logs reads console.* rather than raw fd writes", () => {
     const consoleSpies = ["error", "warn", "info", "debug"] as const;
     const spies = consoleSpies.map((method) =>

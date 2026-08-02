@@ -102,6 +102,17 @@ throws is propagated to the caller; no record is emitted.
 Use `logger.isLevelEnabled(level)` to branch explicitly when a thunk is not the
 right fit.
 
+### Dynamic-level logging
+
+`logger.log(level, metadata, message?)` routes a computed level to the matching
+level method. It only accepts the existing seven levels and silently ignores
+invalid levels:
+
+```ts
+const severity = computeSeverity();
+logger.log(severity, { userId: "abc-123" }, "handled request");
+```
+
 ## `LOG_LEVEL`
 
 `createForgeLogger()` resolves its effective level in this order:

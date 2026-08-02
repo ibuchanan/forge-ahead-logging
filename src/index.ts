@@ -680,6 +680,11 @@ export interface ForgeLogger {
   info: LogMethod;
   debug: LogMethod;
   trace: LogMethod;
+  log(
+    level: Exclude<ForgeLogLevel, "silent">,
+    obj: Record<string, unknown> | string | (() => Record<string, unknown>),
+    message?: string,
+  ): void;
   isLevelEnabled(level: ForgeLogLevel): boolean;
   child(bindings: Record<string, unknown>): ForgeLogger;
   forgeInvocation(
@@ -729,6 +734,12 @@ function wrapPinoLogger(pinoLogger: pino.Logger): ForgeLogger {
       pinoLogger.debug(resolveLogMethodArg(obj, "debug", pinoLogger), message),
     trace: (obj, message) =>
       pinoLogger.trace(resolveLogMethodArg(obj, "trace", pinoLogger), message),
+    log: (level, obj, message) => {
+      if (!isForgeLogLevel(level)) {
+        return;
+      }
+      forgeLogger[level](obj, message);
+    },
     isLevelEnabled: (level) => pinoLogger.isLevelEnabled(level),
     child: (bindings) => wrapPinoLogger(pinoLogger.child(bindings)),
     forgeInvocation: (event, message, options) =>

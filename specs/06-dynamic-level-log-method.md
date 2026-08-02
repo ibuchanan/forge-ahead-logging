@@ -6,7 +6,7 @@
 
 **Status:** ready-for-agent
 
-- [ ] `logger.log(level, metadata, message?)` is available on `ForgeLogger` and accepts every `ForgeLogLevel` except `silent`.
-- [ ] The call routes to the matching level method and applies the same redaction, summarization, and message-only rules.
-- [ ] Invalid or unknown levels are handled safely (no emission, documented fallback) and covered by a test.
-- [ ] `logger.log` does not allow custom severity levels outside the existing set.
+- [x] `logger.log(level, metadata, message?)` is available on `ForgeLogger` and accepts every `ForgeLogLevel` except `silent`.
+- [x] The call routes to the matching level method and applies the same redaction, summarization, and message-only rules.
+- [x] Invalid or unknown levels are handled safely (no emission, documented fallback) and covered by a test.
+- [x] `logger.log` does not allow custom severity levels outside the existing set.
