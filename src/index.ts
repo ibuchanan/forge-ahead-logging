@@ -920,6 +920,7 @@ export interface ForgeLoggerOptions {
   redact?: pino.LoggerOptions["redact"];
   base?: pino.LoggerOptions["base"];
   pretty?: boolean;
+  recordMetadata?: () => Record<string, unknown>;
 }
 
 export interface ForgeLogger {
@@ -959,6 +960,26 @@ export interface ForgeLogger {
 }
 
 const underlyingPinoLoggers = new WeakMap<ForgeLogger, pino.Logger>();
+const recordMetadataByPinoLogger = new WeakMap<
+  pino.Logger,
+  () => Record<string, unknown>
+>();
+let defaultLoggerProxy: ForgeLogger | undefined;
+
+function buildRecordMetadata(
+  pinoLogger: pino.Logger,
+  level: ForgeLogLevel,
+): Record<string, unknown> {
+  const callback = recordMetadataByPinoLogger.get(pinoLogger);
+  if (!callback || !pinoLogger.isLevelEnabled(level)) {
+    return {};
+  }
+  try {
+    return summarizeForLog(callback()) as Record<string, unknown>;
+  } catch {
+    return { recordMetadataError: true };
+  }
+}
 
 function resolveLogCall(
   obj: Record<string, unknown> | string | (() => Record<string, unknown>),
@@ -977,10 +998,16 @@ function resolveLogCall(
 
   const ambient = getLogContext();
   const base = pinoLogger.bindings();
+  const recordMetadata = buildRecordMetadata(pinoLogger, level);
   if (typeof resolved === "string") {
-    return { obj: { ...ambient, ...base }, message: resolved };
+    return {
+      obj: { ...base, ...recordMetadata, ...ambient },
+      message: resolved,
+    };
   }
-  return { obj: { ...ambient, ...base, ...resolved } };
+  return {
+    obj: { ...base, ...recordMetadata, ...ambient, ...resolved },
+  };
 }
 
 function logWithLevel(
@@ -1008,7 +1035,14 @@ function wrapPinoLogger(pinoLogger: pino.Logger): ForgeLogger {
       forgeLogger[level](obj, message);
     },
     isLevelEnabled: (level) => pinoLogger.isLevelEnabled(level),
-    child: (bindings) => wrapPinoLogger(pinoLogger.child(bindings)),
+    child: (bindings) => {
+      const childPinoLogger = pinoLogger.child(bindings);
+      const childRecordMetadata = recordMetadataByPinoLogger.get(pinoLogger);
+      if (childRecordMetadata) {
+        recordMetadataByPinoLogger.set(childPinoLogger, childRecordMetadata);
+      }
+      return wrapPinoLogger(childPinoLogger);
+    },
     forgeInvocation: (event, message, options) =>
       logForgeInvocation(forgeLogger, event, message, options),
     invocation: (event, handler, options) =>
@@ -1236,16 +1270,31 @@ export function createForgeLogger(
     },
     effectiveDestination,
   );
+  if (options.recordMetadata) {
+    recordMetadataByPinoLogger.set(pinoLogger, options.recordMetadata);
+  }
   return wrapPinoLogger(pinoLogger);
 }
 
 let defaultLogger: ForgeLogger | undefined;
 
+function setDefaultLogger(logger: ForgeLogger): void {
+  defaultLogger = logger;
+  const pinoLogger = underlyingPinoLoggers.get(logger);
+  if (pinoLogger && defaultLoggerProxy) {
+    underlyingPinoLoggers.set(defaultLoggerProxy, pinoLogger);
+  }
+}
+
+export function configureForgeLogger(options: ForgeLoggerOptions): void {
+  setDefaultLogger(createForgeLogger(options));
+}
+
 function getDefaultLogger(): ForgeLogger {
   if (defaultLogger === undefined) {
-    defaultLogger = createForgeLogger();
+    setDefaultLogger(createForgeLogger());
   }
-  return defaultLogger;
+  return defaultLogger as ForgeLogger;
 }
 
 /**
@@ -1260,3 +1309,5 @@ export const log: ForgeLogger = new Proxy({} as ForgeLogger, {
     ];
   },
 });
+
+defaultLoggerProxy = log;

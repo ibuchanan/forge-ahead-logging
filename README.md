@@ -146,10 +146,12 @@ await withLogContext({ requestId: "req-123", cloudId: "cloud-1" }, async () => {
 });
 ```
 
-Explicit per-call metadata and `child()` bindings win over ambient bindings on
-the same key. Ambient values are summarized and redacted the same way as normal
-metadata. Context is empty outside any `withLogContext` scope and does not leak
-after the scope ends. Concurrent invocations are isolated.
+Explicit per-call metadata wins over ambient context, `recordMetadata`, and
+base/`child()` bindings on the same key. Precedence, from lowest to highest, is:
+base/`child()` bindings, `recordMetadata`, ambient context, then explicit
+per-call metadata. Ambient values are summarized and redacted the same way as
+normal metadata. Context is empty outside any `withLogContext` scope and does
+not leak after the scope ends. Concurrent invocations are isolated.
 
 ### Invocation wrapper
 
@@ -203,6 +205,40 @@ getLogLevel({ LOG_LEVEL: "not-a-level" });
 In a deployed Forge app, `LOG_LEVEL` is a non-secret Forge runtime variable.
 `debug` and `trace` are meant for short-lived diagnostics, set explicitly —
 not left on by default.
+
+## Configuring the default logger and per-record enrichment
+
+Use `configureForgeLogger(options)` to reconfigure the ready-to-use default
+`log` logger. It only affects the default singleton; `createForgeLogger()`
+instances are unaffected:
+
+```ts
+import { configureForgeLogger } from "@forge-ahead/logging";
+
+configureForgeLogger({ name: "my-forge-app" });
+```
+
+Use `recordMetadata` on any logger to add stable per-record fields (such as a
+trace ID) from a callback. The callback is only invoked when the record's level
+is enabled, and its output is summarized and redacted before it reaches the
+record. If the callback throws, the record is still emitted with a
+`recordMetadataError: true` marker instead of crashing the application call:
+
+```ts
+const logger = createForgeLogger({
+  recordMetadata: () => ({ traceId: getTraceId() }),
+});
+
+logger.info({ userId: "abc-123" }, "handled request");
+// record includes { traceId, userId, ... }
+```
+
+Precedence, from lowest to highest, is:
+
+1. `base`/`child()` bindings
+2. `recordMetadata`
+3. Ambient context from `withLogContext`
+4. Explicit per-call metadata
 
 ## Default redaction is a backstop
 
@@ -500,8 +536,9 @@ package.
 ## API Surface
 
 - `log` is the ready-to-use default `ForgeLogger`; use `createForgeLogger(options?)`
-  for named loggers, custom redaction, injected `env`, or `pretty: true` for
-  local human-readable output (also enabled via `FORGE_LOG_PRETTY=true`).
+  for named loggers, custom redaction, injected `env`, `pretty: true` for
+  local human-readable output (also enabled via `FORGE_LOG_PRETTY=true`), or
+  `recordMetadata` for stable per-record fields.
 - Level methods accept object-first metadata, a message-only string, or a lazy
   metadata thunk. `logger.isLevelEnabled(level)` checks whether a level is active.
 - `withLogContext(bindings, operation)` and `getLogContext()` manage ambient
@@ -510,6 +547,8 @@ package.
   wrap a handler, log a completion record with `durationMs` and `outcome`, and
   rethrow any error. `Result` return values are classified as success/failure.
 - `unwrapPinoLogger(logger)` exposes the underlying pino instance for interop.
+- `configureForgeLogger(options?)` reconfigures the default singleton logger
+  (`log`); `createForgeLogger()` instances are unaffected.
 - `resolveLogLevel(name?, env?)` and `getLogLevel(env?)` resolve
   `LOG_LEVEL`/`NODE_ENV`, including per-name overrides, without logging as a
   side effect.

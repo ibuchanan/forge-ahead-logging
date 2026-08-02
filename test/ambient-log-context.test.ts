@@ -40,16 +40,16 @@ describe("withLogContext", () => {
     expect(record.requestId).toBe("req-2");
   });
 
-  it("lets child bindings win over ambient bindings", () => {
+  it("lets ambient context win over child bindings", () => {
     const { logger, records } = createCapturingLogger();
 
     withLogContext({ requestId: "req-1" }, () => {
       const child = logger.child({ requestId: "req-2" });
-      child.info({}, "child wins");
+      child.info({}, "ambient wins");
     });
 
     const [record] = records;
-    expect(record.requestId).toBe("req-2");
+    expect(record.requestId).toBe("req-1");
   });
 
   it("redacts secret-shaped ambient keys", () => {
