@@ -113,8 +113,16 @@ log.info("handled request");
 ```
 
 Object-first remains the recommended shape for production code; the
-message-only form is a convenience for simple cases. This package's
-`ForgeLogger` does not expose pino's string-interpolation call shape.
+message-only form is a convenience for simple cases. You can also pass pino
+message-formatting arguments after the message string for occasional interpolation:
+
+```ts
+logger.info({ userId: "u-1" }, "Created user %s", "u-1");
+// message: "Created user u-1"
+```
+
+This uses pino's `%s`, `%d`, `%j` placeholders. Brace-style interpolation is
+not supported. `ForgeLogger` does not expose pino's object-first call shape.
 
 ### Lazy metadata
 
@@ -583,8 +591,9 @@ package.
   local human-readable output (also enabled via `FORGE_LOG_PRETTY=true`),
   `recordMetadata` for stable per-record fields, or `timestamp: "iso"` for
   ISO-8601 timestamps.
-- Level methods accept object-first metadata, a message-only string, or a lazy
-  metadata thunk. `logger.isLevelEnabled(level)` checks whether a level is active.
+- Level methods accept object-first metadata, a message-only string, a lazy
+  metadata thunk, or message formatting arguments after the message string
+  (`%s`, `%d`, `%j`). `logger.isLevelEnabled(level)` checks whether a level is active.
 - `withLogContext(bindings, operation)` and `getLogContext()` manage ambient
   bindings that merge into every record emitted inside the scope.
 - `logger.invocation(event, handler, options?)` and `withForgeInvocationLogging(...)`
