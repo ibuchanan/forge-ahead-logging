@@ -6,7 +6,7 @@
 
 **Status:** ready-for-agent
 
-- [ ] A small spike function is deployed or exercised in a representative Forge runtime (`nodejs20.x`/`22.x`/`24.x`).
-- [ ] The spike verifies that an `AsyncLocalStorage` value set at the start of an invocation is still readable after at least one `await` and one nested async call.
-- [ ] Concurrent invocations are checked for isolation.
-- [ ] The outcome is written up as an ADR or spike note that gates the design of ambient log context.
+- [x] A small spike function is deployed or exercised in a representative Forge runtime (`nodejs20.x`/`22.x`/`24.x`).
+- [x] The spike verifies that an `AsyncLocalStorage` value set at the start of an invocation is still readable after at least one `await` and one nested async call.
+- [x] Concurrent invocations are checked for isolation.
+- [x] The outcome is written up as an ADR or spike note that gates the design of ambient log context.
