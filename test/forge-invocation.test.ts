@@ -1,4 +1,3 @@
-import pino from "pino";
 import { describe, expect, it } from "vitest";
 import { logForgeInvocation, summarizeForgeInvocation } from "../src/index";
 import { createCapturingLogger } from "../src/testing";
@@ -61,7 +60,7 @@ describe("logForgeInvocation", () => {
     logForgeInvocation(logger, event, "invocation received");
 
     const [record] = records;
-    expect(record.level).toBe(pino.levels.values.info);
+    expect(record.level).toBe("info");
     expect(record.msg).toBe("invocation received");
     expect(record.eventType).toBe("avi:jira:created:issue");
     expect(record.method).toBe("POST");
@@ -108,7 +107,7 @@ describe("logger.forgeInvocation", () => {
     logger.forgeInvocation(event, "invocation received");
 
     const [record] = records;
-    expect(record.level).toBe(pino.levels.values.info);
+    expect(record.level).toBe("info");
     expect(record.eventType).toBe("avi:jira:created:issue");
   });
 });

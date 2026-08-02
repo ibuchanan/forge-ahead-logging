@@ -1,3 +1,12 @@
+## [Unreleased]
+
+### ⚠️ Output Shape Change
+
+- Records emitted by `createForgeLogger()` and the default `log` export now
+  carry a string `level` field (`"info"`, `"debug"`, etc.) instead of the
+  pino numeric level. Downstream parsers that rely on `level` being a number
+  need to be updated.
+
 ## [0.2.5] - 2026-07-23
 
 ### 🐛 Bug Fixes

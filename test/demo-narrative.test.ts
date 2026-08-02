@@ -1,4 +1,3 @@
-import pino from "pino";
 import { describe, expect, it } from "vitest";
 import { createCapturingLogger } from "../src/testing";
 import { createDemoNarrative } from "../src/demo";
@@ -11,7 +10,7 @@ describe("createDemoNarrative", () => {
     demo.step("user signs up");
 
     const [record] = records;
-    expect(record.level).toBe(pino.levels.values.info);
+    expect(record.level).toBe("info");
     expect(record.msg).toBe("user signs up");
     expect(record).toMatchObject({
       kind: "demoNarrativeStep",

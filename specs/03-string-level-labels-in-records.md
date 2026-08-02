@@ -6,7 +6,7 @@
 
 **Status:** ready-for-agent
 
-- [ ] Every emitted record carries a string level matching `ForgeLogLevel`.
-- [ ] Console-method routing per level (`error`, `warn`, `info`, `debug`) is unchanged.
-- [ ] The change is noted in CHANGELOG as output-shape-affecting for downstream parsers.
-- [ ] Existing tests that assert on numeric levels are updated to string labels.
+- [x] Every emitted record carries a string level matching `ForgeLogLevel`.
+- [x] Console-method routing per level (`error`, `warn`, `info`, `debug`) is unchanged.
+- [x] The change is noted in CHANGELOG as output-shape-affecting for downstream parsers.
+- [x] Existing tests that assert on numeric levels are updated to string labels.

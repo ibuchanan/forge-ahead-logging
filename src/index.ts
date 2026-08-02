@@ -784,6 +784,11 @@ export function createForgeLogger(
       name: options.name,
       base: options.base ?? {},
       redact: withDefaultRedaction(options.redact),
+      formatters: {
+        level(label) {
+          return { level: label };
+        },
+      },
     },
     destination,
   );

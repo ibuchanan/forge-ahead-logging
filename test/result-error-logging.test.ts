@@ -1,5 +1,4 @@
 import { err, ok, type ProblemDetails } from "@forge-ahead/errors";
-import pino from "pino";
 import { describe, expect, it } from "vitest";
 import { logError, logResult } from "../src/index";
 import { createCapturingLogger } from "../src/testing";
@@ -13,7 +12,7 @@ describe("logResult", () => {
     logResult(logger, ok({ id: 1, secret: "shh" }));
 
     const [record] = records;
-    expect(record.level).toBe(pino.levels.values.debug);
+    expect(record.level).toBe("debug");
     expect(record.ok).toBe(true);
     expect(record.id).toBeUndefined();
     expect(record.secret).toBeUndefined();
@@ -50,7 +49,7 @@ describe("logResult err branch", () => {
     logResult(logger, err(problem));
 
     const [record] = records;
-    expect(record.level).toBe(pino.levels.values.error);
+    expect(record.level).toBe("error");
     expect(record).toMatchObject({
       type: problem.type,
       title: problem.title,
@@ -105,7 +104,7 @@ describe("logError", () => {
     logError(logger, "boom");
 
     const [record] = records;
-    expect(record.level).toBe(pino.levels.values.error);
+    expect(record.level).toBe("error");
     expect(record.status).toBe(500);
     expect(record.detail).toBe("boom");
   });
@@ -162,7 +161,7 @@ describe("logger.result and logger.errorResult", () => {
     logger.result(ok({ id: 1 }));
 
     const [record] = records;
-    expect(record.level).toBe(pino.levels.values.debug);
+    expect(record.level).toBe("debug");
     expect(record.ok).toBe(true);
   });
 
@@ -172,7 +171,7 @@ describe("logger.result and logger.errorResult", () => {
     logger.errorResult("boom");
 
     const [record] = records;
-    expect(record.level).toBe(pino.levels.values.error);
+    expect(record.level).toBe("error");
     expect(record.status).toBe(500);
     expect(record.detail).toBe("boom");
   });

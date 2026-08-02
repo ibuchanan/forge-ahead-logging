@@ -1,4 +1,3 @@
-import pino from "pino";
 import { describe, expect, it, vi } from "vitest";
 import { logProbe } from "../src/index";
 import { createCapturingLogger } from "../src/testing";
@@ -13,7 +12,7 @@ describe("logProbe", () => {
 
     expect(returned).toBe(42);
     const [record] = records;
-    expect(record.level).toBe(pino.levels.values.debug);
+    expect(record.level).toBe("debug");
     expect(record.debugProbe).toMatchObject({ label: "answer", value: 42 });
   });
 
@@ -34,7 +33,7 @@ describe("logProbe", () => {
     logProbe(logger, "answer", 42, { level: "trace" });
 
     const [record] = records;
-    expect(record.level).toBe(pino.levels.values.trace);
+    expect(record.level).toBe("trace");
   });
 
   it("fulfills with the original resolved value and logs after settling", async () => {
@@ -46,7 +45,7 @@ describe("logProbe", () => {
 
     expect(returned).toBe(42);
     const [record] = records;
-    expect(record.level).toBe(pino.levels.values.debug);
+    expect(record.level).toBe("debug");
     expect(record.debugProbe).toMatchObject({ label: "fetch", value: 42 });
   });
 
@@ -61,7 +60,7 @@ describe("logProbe", () => {
     ).rejects.toBe(failure);
 
     const [record] = records;
-    expect(record.level).toBe(pino.levels.values.debug);
+    expect(record.level).toBe("debug");
     expect(record.debugProbe).toMatchObject({
       label: "fetch",
       error: { detail: "network down" },
@@ -81,7 +80,7 @@ describe("logProbe", () => {
     ).toThrow(failure);
 
     const [record] = records;
-    expect(record.level).toBe(pino.levels.values.debug);
+    expect(record.level).toBe("debug");
     expect(record.debugProbe).toMatchObject({
       label: "compute",
       error: { detail: "boom" },
@@ -169,7 +168,7 @@ describe("logger.probe", () => {
 
     expect(returned).toBe(42);
     const [record] = records;
-    expect(record.level).toBe(pino.levels.values.debug);
+    expect(record.level).toBe("debug");
     expect(record.debugProbe).toMatchObject({ label: "answer", value: 42 });
   });
 

@@ -1,4 +1,3 @@
-import pino from "pino";
 import { describe, expect, it, vi } from "vitest";
 import { createForgeLogger, unwrapPinoLogger } from "../src/index";
 import { createCapturingLogger } from "../src/testing";
@@ -12,7 +11,7 @@ describe("createForgeLogger", () => {
     const [record] = records;
     expect(record.msg).toBe("hello");
     expect(record.foo).toBe("bar");
-    expect(record.level).toBe(pino.levels.values.info);
+    expect(record.level).toBe("info");
   });
 
   it("suppresses debug records at the default info level", () => {
@@ -32,7 +31,7 @@ describe("createForgeLogger", () => {
 
     const [record] = records;
     expect(record.msg).toBe("now it appears");
-    expect(record.level).toBe(pino.levels.values.debug);
+    expect(record.level).toBe("debug");
   });
 
   it("includes the logger name when supplied", () => {
