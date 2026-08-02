@@ -1048,6 +1048,11 @@ function consoleMethodForLevel(
   return CONSOLE_METHOD_BY_LEVEL_LABEL[label] ?? "info";
 }
 
+// Set while the Forge logger is writing to `console.*`, so any installed
+// console capture can detect logger output and route it to the original
+// console methods instead of recursing back into the logger.
+let isLoggerWritingToConsole = false;
+
 interface ForgeDestination extends pino.DestinationStream {
   lastLevel: number;
 }
@@ -1065,7 +1070,9 @@ function createForgeDestination(): pino.DestinationStream {
     lastLevel: pino.levels.values.info,
     write(chunk: string): void {
       const line = chunk.endsWith("\n") ? chunk.slice(0, -1) : chunk;
+      isLoggerWritingToConsole = true;
       console[consoleMethodForLevel(destination.lastLevel)](line);
+      isLoggerWritingToConsole = false;
     },
   };
   (destination as unknown as Record<symbol, boolean>)[
@@ -1127,6 +1134,83 @@ function isPrettyEnabled(
   env: Record<string, string | undefined>,
 ): boolean {
   return options.pretty === true || env.FORGE_LOG_PRETTY === "true";
+}
+
+function formatConsoleArgs(
+  level: "log" | "info" | "warn" | "error" | "debug",
+  args: unknown[],
+): {
+  obj: Record<string, unknown>;
+  message: string;
+} {
+  if (args.length === 0) {
+    return { obj: {}, message: "" };
+  }
+  if (typeof args[0] === "string") {
+    return {
+      obj:
+        args.length > 1 ? { consoleArgs: summarizeForLog(args.slice(1)) } : {},
+      message: args[0],
+    };
+  }
+  return {
+    obj: { consoleArgs: summarizeForLog(args) },
+    message: `console.${level}`,
+  };
+}
+
+export function installConsoleCapture(logger: ForgeLogger): () => void {
+  const previous = {
+    log: console.log,
+    info: console.info,
+    warn: console.warn,
+    error: console.error,
+    debug: console.debug,
+  };
+
+  console.log = (...args: unknown[]) => {
+    if (isLoggerWritingToConsole) {
+      return previous.log(...args);
+    }
+    const { obj, message } = formatConsoleArgs("log", args);
+    logger.info(obj, message);
+  };
+  console.info = (...args: unknown[]) => {
+    if (isLoggerWritingToConsole) {
+      return previous.info(...args);
+    }
+    const { obj, message } = formatConsoleArgs("info", args);
+    logger.info(obj, message);
+  };
+  console.warn = (...args: unknown[]) => {
+    if (isLoggerWritingToConsole) {
+      return previous.warn(...args);
+    }
+    const { obj, message } = formatConsoleArgs("warn", args);
+    logger.warn(obj, message);
+  };
+  console.error = (...args: unknown[]) => {
+    if (isLoggerWritingToConsole) {
+      return previous.error(...args);
+    }
+    const { obj, message } = formatConsoleArgs("error", args);
+    logger.error(obj, message);
+  };
+  console.debug = (...args: unknown[]) => {
+    if (isLoggerWritingToConsole) {
+      return previous.debug(...args);
+    }
+    const { obj, message } = formatConsoleArgs("debug", args);
+    logger.debug(obj, message);
+  };
+
+  return () => {
+    console.log = previous.log;
+    console.info = previous.info;
+    console.warn = previous.warn;
+    console.error = previous.error;
+    console.debug = previous.debug;
+  };
 }
 
 export function createForgeLogger(

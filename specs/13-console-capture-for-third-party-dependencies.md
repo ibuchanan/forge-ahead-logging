@@ -4,10 +4,10 @@
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** implemented
 
-- [ ] An explicit opt-in function captures the original `console.*` references at install time and routes dependency output through the Forge logger.
-- [ ] The logger’s own output does not recurse through the captured methods.
-- [ ] Captured records are still summarized and redacted by the Forge logger.
-- [ ] The feature is off by default; apps must call the installer explicitly.
-- [ ] A test verifies that the capture does not break the logger’s own output.
+- [x] An explicit opt-in function captures the original `console.*` references at install time and routes dependency output through the Forge logger.
+- [x] The logger’s own output does not recurse through the captured methods.
+- [x] Captured records are still summarized and redacted by the Forge logger.
+- [x] The feature is off by default; apps must call the installer explicitly.
+- [x] A test verifies that the capture does not break the logger’s own output.

@@ -450,6 +450,28 @@ supplied, is summarized and redacted the same way as everywhere else in this
 package, via `summarizeForLog()`. Use a distinct `storyId` per narrative
 thread; nested or child narratives are not supported in this version.
 
+## Console capture for third-party dependencies
+
+Third-party libraries that write directly to `console.log`/`console.error`
+can be routed through the Forge logger so their output is summarized and
+redacted instead of bypassing the package's controls. Capture is opt-in and
+off by default:
+
+```ts
+import { installConsoleCapture } from "@forge-ahead/logging";
+
+const uninstall = installConsoleCapture(logger);
+
+someLibrary.doWork(); // console.log output now appears as logger records
+
+uninstall(); // restore original console.* methods
+```
+
+`console.log`/`console.info` are captured at `logger.info`, `console.warn` at
+`logger.warn`, and `console.error`/`console.debug` at `logger.error`/`logger.debug`.
+The logger's own output is detected and routed to the original `console.*`
+methods, so it does not loop back through the capture.
+
 ## Testing helpers
 
 A public testing subpath lets tests assert against real log records without
@@ -507,12 +529,15 @@ package.
   integrated with `@forge-ahead/errors`.
 - `logProbe(logger, label, valueOrThunk, options?)` and `logger.probe(...)`
   implement Debug Probe.
+- `installConsoleCapture(logger)` redirects `console.log`/`console.error` from
+  third-party dependencies through the Forge logger; it returns an `uninstall`
+  function that restores the original `console.*` methods.
 - `createDemoNarrative(logger, { storyId })` from the `@forge-ahead/logging/demo`
   subpath implements Demo Narrative Logging; it is not exported from the root
   package.
 - `createCapturingLogger(options?)` from the `@forge-ahead/logging/testing`
-  subpath returns a `{ logger, records }` test helper; it is not exported from
-  the root package.
+  subpath returns a `{ logger, records }` test helper; it is not exported from the
+  root package.
 
 ## Development
 
