@@ -85,6 +85,23 @@ Pretty mode is opt-in and never enabled by default. `FORGE_LOG_PRETTY` is
 intended for local development and test runs; do not set it in production or
 in the Forge runtime.
 
+### Timestamp format
+
+By default emitted records carry pino's `time` field as epoch milliseconds,
+so downstream parsers are unaffected. Pass `timestamp: "iso"` to emit ISO-8601
+strings instead:
+
+```ts
+const logger = createForgeLogger({ timestamp: "iso" });
+
+logger.info({ userId: "abc-123" }, "handled request");
+// { ..., "time": "2026-08-01T12:34:56.789Z", ... }
+```
+
+`configureForgeLogger({ timestamp: "iso" })` applies the same format to the
+default `log` logger. Only enable this when every downstream consumer can
+parse string timestamps.
+
 Level methods (`fatal`, `error`, `warn`, `info`, `debug`, `trace`) are
 object-first: pass a metadata object as the first argument, using `{}` when
 there is no metadata to attach. A message-only call is also supported when
@@ -563,8 +580,9 @@ package.
 
 - `log` is the ready-to-use default `ForgeLogger`; use `createForgeLogger(options?)`
   for named loggers, custom redaction, injected `env`, `pretty: true` for
-  local human-readable output (also enabled via `FORGE_LOG_PRETTY=true`), or
-  `recordMetadata` for stable per-record fields.
+  local human-readable output (also enabled via `FORGE_LOG_PRETTY=true`),
+  `recordMetadata` for stable per-record fields, or `timestamp: "iso"` for
+  ISO-8601 timestamps.
 - Level methods accept object-first metadata, a message-only string, or a lazy
   metadata thunk. `logger.isLevelEnabled(level)` checks whether a level is active.
 - `withLogContext(bindings, operation)` and `getLogContext()` manage ambient

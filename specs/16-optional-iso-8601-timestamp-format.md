@@ -4,9 +4,9 @@
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** implemented
 
-- [ ] An option enables ISO-8601 timestamps in emitted records.
-- [ ] The default timestamp remains pino epoch milliseconds so downstream parsers are unaffected.
-- [ ] The option works for both `createForgeLogger()` and the default logger.
-- [ ] CHANGELOG notes the output-shape impact when the option is enabled.
+- [x] An option enables ISO-8601 timestamps in emitted records.
+- [x] The default timestamp remains pino epoch milliseconds so downstream parsers are unaffected.
+- [x] The option works for both `createForgeLogger()` and the default logger.
+- [x] CHANGELOG notes the output-shape impact when the option is enabled.

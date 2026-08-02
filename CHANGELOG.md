@@ -6,6 +6,10 @@
   carry a string `level` field (`"info"`, `"debug"`, etc.) instead of the
   pino numeric level. Downstream parsers that rely on `level` being a number
   need to be updated.
+- Passing `timestamp: "iso"` (or configuring the default logger with it) changes
+  the `time` field from pino epoch milliseconds to an ISO-8601 string. The
+  default remains epoch milliseconds, so downstream parsers are unaffected
+  unless the option is explicitly enabled.
 
 ## [0.2.5] - 2026-07-23
 

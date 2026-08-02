@@ -934,6 +934,8 @@ export type LogMethod = (
   message?: string,
 ) => void;
 
+export type ForgeTimestampFormat = "epoch" | "iso";
+
 export interface ForgeLoggerOptions {
   name?: string;
   env?: Record<string, string | undefined>;
@@ -941,6 +943,7 @@ export interface ForgeLoggerOptions {
   base?: pino.LoggerOptions["base"];
   pretty?: boolean;
   recordMetadata?: () => Record<string, unknown>;
+  timestamp?: ForgeTimestampFormat;
 }
 
 export interface ForgeLogger {
@@ -1183,6 +1186,16 @@ function createPrettyDestination(
   return wrapper;
 }
 
+function isoTime(): string {
+  return `,"time":"${new Date().toISOString()}"`;
+}
+
+function resolveTimestamp(
+  options: ForgeLoggerOptions,
+): pino.LoggerOptions["timestamp"] {
+  return options.timestamp === "iso" ? isoTime : true;
+}
+
 function isPrettyEnabled(
   options: ForgeLoggerOptions,
   env: Record<string, string | undefined>,
@@ -1282,6 +1295,7 @@ export function createForgeLogger(
       name: options.name,
       base: options.base ?? {},
       redact: withDefaultRedaction(options.redact),
+      timestamp: resolveTimestamp(options),
       formatters: {
         level(label) {
           return { level: label };
