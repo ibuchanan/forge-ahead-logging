@@ -1,3 +1,35 @@
+## [0.3.0] - 2026-08-02
+
+### 🚀 Features
+
+- _(testing)_ Add public testing subpath with createCapturingLogger
+- _(logger)_ Add ready-to-use default log export
+- _(logger)_ [**breaking**] Emit string level labels in records
+- _(logger)_ Accept message-only calls on level methods
+- _(logger)_ Accept lazy metadata thunks on level methods
+- _(logger)_ Add dynamic-level logger.log method
+- _(logger)_ Add ambient log context with withLogContext
+- _(logger)_ Add invocation wrapper with duration and failures
+- _(logger)_ Add bounded cause chains, AggregateError, and stack truncation
+- _(logger)_ Add namespace-level LOG_LEVEL overrides
+- _(logger)_ Add monochrome pretty mode for local development
+- _(logger)_ Add opt-in console capture for third-party dependencies
+- _(logger)_ Add configuration helper and per-record metadata enrichment
+- _(logger)_ Add narrow env-var diagnostic toggles
+- _(logger)_ Add optional ISO-8601 timestamp format
+- _(logger)_ Add message formatting convenience for level methods
+
+### 💼 Other
+
+- _(loguru)_ Feature experiment
+
+### 📚 Documentation
+
+- _(specs)_ Add feature tickets for Loguru-inspired DX improvements
+- _(adr)_ Spike AsyncLocalStorage for ambient log context
+- _(specs)_ Add Loguru-inspired DX feature suggestions
+- _(downstream)_ Add downstream integration guidance for forge-ahead, repo-init, and forge-prelint
+
 ## [Unreleased]
 
 ### ⚠️ Output Shape Change
@@ -15,25 +47,25 @@
 
 ### 🐛 Bug Fixes
 
-- *(logger)* Route Forge destination through console.* methods
+- _(logger)_ Route Forge destination through console.* methods
 
 ## [0.2.4] - 2026-07-23
 
 ### 🐛 Bug Fixes
 
-- *(logger)* Force synchronous pino destination to prevent dropped logs
+- _(logger)_ Force synchronous pino destination to prevent dropped logs
 
 ## [0.2.3] - 2026-07-23
 
 ### 🐛 Bug Fixes
 
-- *(exports)* Add CJS build output for require() consumers
+- _(exports)_ Add CJS build output for require() consumers
 
 ## [0.2.2] - 2026-07-21
 
 ### 🐛 Bug Fixes
 
-- *(exports)* Resolve ./demo subpath under classic TS resolution
+- _(exports)_ Resolve ./demo subpath under classic TS resolution
 
 ## [0.2.1] - 2026-07-19
 
