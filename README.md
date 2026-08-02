@@ -160,18 +160,23 @@ record. The handler body inherits any ambient log context from the caller.
 
 1. A valid `LOG_LEVEL` value (`fatal`, `error`, `warn`, `info`, `debug`,
    `trace`, or `silent`).
-2. `debug`, when `NODE_ENV` is `development` and `LOG_LEVEL` is unset.
-3. `info` otherwise — the safe default for both local runs and production.
+2. A per-name override, such as `LOG_LEVEL="info,my-lib=debug"`, for a named
+   logger and its children.
+3. `debug`, when `NODE_ENV` is `development` and `LOG_LEVEL` is unset.
+4. `info` otherwise — the safe default for both local runs and production.
 
-An invalid `LOG_LEVEL` value falls back to `info` rather than throwing.
-`resolveLogLevel()` and `getLogLevel()` expose this same resolution for
-callers that need it directly, and `options.env` lets tests and scripts
-inject an environment object instead of mutating `process.env`:
+An invalid `LOG_LEVEL` segment falls back to the next applicable rule rather
+than throwing. `resolveLogLevel()` and `getLogLevel()` expose this same
+resolution for callers that need it directly, and `options.env` lets tests
+and scripts inject an environment object instead of mutating `process.env`:
 
 ```ts
 import { getLogLevel, resolveLogLevel } from "@forge-ahead/logging";
 
 resolveLogLevel({ LOG_LEVEL: "debug" });
+// { level: "debug", source: "LOG_LEVEL" }
+
+resolveLogLevel("my-lib", { LOG_LEVEL: "info,my-lib=debug" });
 // { level: "debug", source: "LOG_LEVEL" }
 
 getLogLevel({ LOG_LEVEL: "not-a-level" });
@@ -465,8 +470,9 @@ package.
   wrap a handler, log a completion record with `durationMs` and `outcome`, and
   rethrow any error. `Result` return values are classified as success/failure.
 - `unwrapPinoLogger(logger)` exposes the underlying pino instance for interop.
-- `resolveLogLevel(env?)` and `getLogLevel(env?)` resolve `LOG_LEVEL`/`NODE_ENV`
-  without logging as a side effect.
+- `resolveLogLevel(name?, env?)` and `getLogLevel(env?)` resolve
+  `LOG_LEVEL`/`NODE_ENV`, including per-name overrides, without logging as a
+  side effect.
 - `withDefaultRedaction(redact?)`, `DEFAULT_REDACT_PATHS`, and
   `DEFAULT_REDACTION_CENSOR` back the default redaction backstop.
 - `summarizeForLog(value, options?)` produces JSON-safe, bounded,

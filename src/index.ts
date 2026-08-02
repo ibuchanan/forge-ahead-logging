@@ -34,16 +34,72 @@ function isForgeLogLevel(value: string): value is ForgeLogLevel {
   return (FORGE_LOG_LEVELS as readonly string[]).includes(value);
 }
 
+export function resolveLogLevel(): ResolvedForgeLogLevel;
 export function resolveLogLevel(
-  env: Record<string, string | undefined> = process.env,
+  env: Record<string, string | undefined>,
+): ResolvedForgeLogLevel;
+export function resolveLogLevel(
+  name: string | undefined,
+  env?: Record<string, string | undefined>,
+): ResolvedForgeLogLevel;
+export function resolveLogLevel(
+  nameOrEnv?: string | Record<string, string | undefined>,
+  maybeEnv?: Record<string, string | undefined>,
 ): ResolvedForgeLogLevel {
-  const rawLevel = env.LOG_LEVEL;
-  if (rawLevel !== undefined) {
-    if (isForgeLogLevel(rawLevel)) {
-      return { level: rawLevel, source: "LOG_LEVEL" };
-    }
-    return { level: "info", source: "default", invalidValue: rawLevel };
+  let name: string | undefined;
+  let env: Record<string, string | undefined>;
+  if (typeof nameOrEnv === "string") {
+    name = nameOrEnv;
+    env = maybeEnv ?? process.env;
+  } else if (nameOrEnv !== undefined) {
+    env = nameOrEnv;
+  } else {
+    env = maybeEnv ?? process.env;
   }
+
+  const rawLevel = env.LOG_LEVEL;
+  if (rawLevel !== undefined && rawLevel !== "") {
+    const segments = rawLevel.split(",");
+    let globalLevel: ForgeLogLevel | undefined;
+    const overrides: Record<string, ForgeLogLevel> = {};
+    let invalidValue: string | undefined;
+
+    for (const segment of segments) {
+      const trimmed = segment.trim();
+      if (trimmed === "") {
+        continue;
+      }
+      const eqIndex = trimmed.indexOf("=");
+      if (eqIndex === -1) {
+        if (isForgeLogLevel(trimmed)) {
+          globalLevel = trimmed;
+        } else {
+          invalidValue = invalidValue ?? trimmed;
+        }
+      } else {
+        const segmentName = trimmed.slice(0, eqIndex).trim();
+        const segmentLevel = trimmed.slice(eqIndex + 1).trim();
+        if (isForgeLogLevel(segmentLevel)) {
+          overrides[segmentName] = segmentLevel;
+        } else {
+          invalidValue = invalidValue ?? trimmed;
+        }
+      }
+    }
+
+    if (name !== undefined && overrides[name] !== undefined) {
+      return { level: overrides[name], source: "LOG_LEVEL", invalidValue };
+    }
+
+    if (globalLevel !== undefined) {
+      return { level: globalLevel, source: "LOG_LEVEL", invalidValue };
+    }
+
+    if (invalidValue !== undefined) {
+      return { level: "info", source: "default", invalidValue };
+    }
+  }
+
   if (env.NODE_ENV === "development") {
     return { level: "debug", source: "NODE_ENV" };
   }
@@ -1022,7 +1078,7 @@ export function createForgeLogger(
   destination: pino.DestinationStream = createForgeDestination(),
 ): ForgeLogger {
   const env = options.env ?? process.env;
-  const { level } = resolveLogLevel(env);
+  const { level } = resolveLogLevel(options.name, env);
   const pinoLogger = pino(
     {
       level,

@@ -6,8 +6,8 @@
 
 **Status:** ready-for-agent
 
-- [ ] `resolveLogLevel()` accepts per-name overrides in `LOG_LEVEL` and reports them in `ResolvedForgeLogLevel`.
-- [ ] A plain `LOG_LEVEL=debug` behaves exactly as today.
-- [ ] An override applies to the named logger and loggers created through `child()` from it.
-- [ ] An invalid segment is reported via `invalidValue` rather than causing a fatal error.
-- [ ] The `repo-init` and `forge-prelint` follow-ups documented in `downstream-integration-work.md` are updated if the accepted `LOG_LEVEL` format changes.
+- [x] `resolveLogLevel()` accepts per-name overrides in `LOG_LEVEL` and reports them in `ResolvedForgeLogLevel`.
+- [x] A plain `LOG_LEVEL=debug` behaves exactly as today.
+- [x] An override applies to the named logger and loggers created through `child()` from it.
+- [x] An invalid segment is reported via `invalidValue` rather than causing a fatal error.
+- [x] The `repo-init` and `forge-prelint` follow-ups documented in `downstream-integration-work.md` are updated if the accepted `LOG_LEVEL` format changes.

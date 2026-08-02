@@ -27,6 +27,62 @@ describe("resolveLogLevel", () => {
       invalidValue: "verbose",
     });
   });
+
+  it("applies a per-name override", () => {
+    expect(
+      resolveLogLevel("my-lib", { LOG_LEVEL: "info,my-lib=debug" }),
+    ).toEqual({
+      level: "debug",
+      source: "LOG_LEVEL",
+    });
+  });
+
+  it("uses the global level when no override matches the name", () => {
+    expect(
+      resolveLogLevel("other-lib", { LOG_LEVEL: "info,my-lib=debug" }),
+    ).toEqual({
+      level: "info",
+      source: "LOG_LEVEL",
+    });
+  });
+
+  it("treats the first segment as global level even when it contains an override", () => {
+    expect(
+      resolveLogLevel("my-lib", { LOG_LEVEL: "warn,my-lib=debug" }),
+    ).toEqual({
+      level: "debug",
+      source: "LOG_LEVEL",
+    });
+  });
+
+  it("reports an invalid override segment without causing a fatal error", () => {
+    expect(
+      resolveLogLevel("my-lib", { LOG_LEVEL: "info,my-lib=verbose" }),
+    ).toEqual({
+      level: "info",
+      source: "LOG_LEVEL",
+      invalidValue: "my-lib=verbose",
+    });
+  });
+
+  it("falls back to default when no global level and no override matches", () => {
+    expect(resolveLogLevel("other", { LOG_LEVEL: "my-lib=debug" })).toEqual({
+      level: "info",
+      source: "default",
+    });
+  });
+
+  it("falls back to NODE_ENV when no global level and no override matches", () => {
+    expect(
+      resolveLogLevel("other", {
+        LOG_LEVEL: "my-lib=debug",
+        NODE_ENV: "development",
+      }),
+    ).toEqual({
+      level: "debug",
+      source: "NODE_ENV",
+    });
+  });
 });
 
 describe("getLogLevel", () => {

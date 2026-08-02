@@ -74,6 +74,33 @@ describe("createForgeLogger", () => {
     expect(record.requestId).toBe("req-123");
   });
 
+  it("applies per-name LOG_LEVEL overrides to the named logger", () => {
+    const { logger, records } = createCapturingLogger({
+      name: "my-lib",
+      env: { LOG_LEVEL: "info,my-lib=debug" },
+    });
+
+    logger.debug({}, "debug for my-lib");
+
+    const [record] = records;
+    expect(record.msg).toBe("debug for my-lib");
+    expect(record.level).toBe("debug");
+  });
+
+  it("lets child loggers inherit a per-name LOG_LEVEL override", () => {
+    const { logger, records } = createCapturingLogger({
+      name: "my-lib",
+      env: { LOG_LEVEL: "info,my-lib=debug" },
+    });
+    const child = logger.child({ requestId: "req-123" });
+
+    child.debug({}, "debug from child");
+
+    const [record] = records;
+    expect(record.msg).toBe("debug from child");
+    expect(record.level).toBe("debug");
+  });
+
   it("accepts a message-only call equivalent to an empty metadata object", () => {
     const { logger, records } = createCapturingLogger();
 
