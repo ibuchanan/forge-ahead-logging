@@ -919,6 +919,7 @@ export interface ForgeLoggerOptions {
   env?: Record<string, string | undefined>;
   redact?: pino.LoggerOptions["redact"];
   base?: pino.LoggerOptions["base"];
+  pretty?: boolean;
 }
 
 export interface ForgeLogger {
@@ -1073,12 +1074,70 @@ function createForgeDestination(): pino.DestinationStream {
   return destination;
 }
 
+function formatPrettyValue(value: unknown): string {
+  if (value === null) {
+    return "null";
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  return JSON.stringify(value);
+}
+
+function formatPrettyLine(chunk: string): string {
+  const record = JSON.parse(chunk) as Record<string, unknown>;
+  const timestamp = new Date(record.time as number).toISOString();
+  const level = String(record.level).toUpperCase();
+  const message = String(record.msg ?? "");
+  const fields = Object.entries(record)
+    .filter(([key]) => key !== "time" && key !== "level" && key !== "msg")
+    .map(([key, value]) => `${key}=${formatPrettyValue(value)}`)
+    .join(" ");
+  return fields.length > 0
+    ? `${timestamp} ${level} ${message} ${fields}`
+    : `${timestamp} ${level} ${message}`;
+}
+
+function createPrettyDestination(
+  destination: pino.DestinationStream,
+): pino.DestinationStream {
+  const wrapper: ForgeDestination = {
+    get lastLevel(): number {
+      return (destination as ForgeDestination).lastLevel;
+    },
+    set lastLevel(value: number) {
+      (destination as ForgeDestination).lastLevel = value;
+    },
+    write(chunk: string): void {
+      const line = formatPrettyLine(chunk);
+      destination.write(line);
+    },
+  };
+  (wrapper as unknown as Record<symbol, boolean>)[
+    pino.symbols.needsMetadataGsym
+  ] = true;
+  return wrapper;
+}
+
+function isPrettyEnabled(
+  options: ForgeLoggerOptions,
+  env: Record<string, string | undefined>,
+): boolean {
+  return options.pretty === true || env.FORGE_LOG_PRETTY === "true";
+}
+
 export function createForgeLogger(
   options: ForgeLoggerOptions = {},
   destination: pino.DestinationStream = createForgeDestination(),
 ): ForgeLogger {
   const env = options.env ?? process.env;
   const { level } = resolveLogLevel(options.name, env);
+  const effectiveDestination = isPrettyEnabled(options, env)
+    ? createPrettyDestination(destination)
+    : destination;
   const pinoLogger = pino(
     {
       level,
@@ -1091,7 +1150,7 @@ export function createForgeLogger(
         },
       },
     },
-    destination,
+    effectiveDestination,
   );
   return wrapPinoLogger(pinoLogger);
 }
