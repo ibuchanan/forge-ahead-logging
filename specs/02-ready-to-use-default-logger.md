@@ -6,8 +6,8 @@
 
 **Status:** ready-for-agent
 
-- [ ] A default logger is exported from the root package and is created on first use, not at import time.
-- [ ] The default logger emits records indistinguishable from `createForgeLogger()` with no options.
-- [ ] `LOG_LEVEL` resolution is not frozen before the consuming environment can read Forge variables.
-- [ ] `createForgeLogger()` remains the path for named loggers, custom redaction, and injected `env`.
-- [ ] README shows the default logger as the simplest getting-started path.
+- [x] A default logger is exported from the root package and is created on first use, not at import time.
+- [x] The default logger emits records indistinguishable from `createForgeLogger()` with no options.
+- [x] `LOG_LEVEL` resolution is not frozen before the consuming environment can read Forge variables.
+- [x] `createForgeLogger()` remains the path for named loggers, custom redaction, and injected `env`.
+- [x] README shows the default logger as the simplest getting-started path.

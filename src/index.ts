@@ -789,3 +789,25 @@ export function createForgeLogger(
   );
   return wrapPinoLogger(pinoLogger);
 }
+
+let defaultLogger: ForgeLogger | undefined;
+
+function getDefaultLogger(): ForgeLogger {
+  if (defaultLogger === undefined) {
+    defaultLogger = createForgeLogger();
+  }
+  return defaultLogger;
+}
+
+/**
+ * A ready-to-use default logger. It is created on first use, not at import
+ * time, so `LOG_LEVEL` resolution is not frozen before the consuming
+ * environment can read Forge variables.
+ */
+export const log: ForgeLogger = new Proxy({} as ForgeLogger, {
+  get(_target, prop) {
+    return (getDefaultLogger() as unknown as Record<string | symbol, unknown>)[
+      prop
+    ];
+  },
+});

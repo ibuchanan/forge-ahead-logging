@@ -47,12 +47,25 @@ The package is published as ESM and targets Node 22 or newer, matching
 Atlassian's recommended Forge runtime floor for new deployments.
 
 ```ts
+import { log } from "@forge-ahead/logging";
+
+log.info({ userId: "abc-123" }, "handled request");
+log.debug({}, "verbose diagnostic detail");
+```
+
+`log` is a ready-to-use default logger. It is created on first use, not at
+import time, so `LOG_LEVEL` resolution is not frozen before the consuming
+environment can read Forge variables.
+
+Use `createForgeLogger()` when you need a named logger, custom redaction, or
+an injected `env` for tests and scripts:
+
+```ts
 import { createForgeLogger } from "@forge-ahead/logging";
 
 const logger = createForgeLogger({ name: "my-forge-app" });
 
 logger.info({ userId: "abc-123" }, "handled request");
-logger.debug({}, "verbose diagnostic detail");
 ```
 
 Level methods (`fatal`, `error`, `warn`, `info`, `debug`, `trace`) are
@@ -355,8 +368,9 @@ package.
 
 ## API Surface
 
-- `createForgeLogger(options?)` returns a `ForgeLogger`; `unwrapPinoLogger(logger)`
-  exposes the underlying pino instance for interop.
+- `log` is the ready-to-use default `ForgeLogger`; use `createForgeLogger(options?)`
+  for named loggers, custom redaction, or injected `env`.
+- `unwrapPinoLogger(logger)` exposes the underlying pino instance for interop.
 - `resolveLogLevel(env?)` and `getLogLevel(env?)` resolve `LOG_LEVEL`/`NODE_ENV`
   without logging as a side effect.
 - `withDefaultRedaction(redact?)`, `DEFAULT_REDACT_PATHS`, and
