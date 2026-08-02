@@ -134,6 +134,26 @@ the same key. Ambient values are summarized and redacted the same way as normal
 metadata. Context is empty outside any `withLogContext` scope and does not leak
 after the scope ends. Concurrent invocations are isolated.
 
+### Invocation wrapper
+
+`logger.invocation(event, handler, options?)` wraps a Forge resolver or handler
+and emits a single completion record with `durationMs` and `outcome`. Thrown
+and rejected values are logged through the safe Problem Details path and then
+rethrown with the same identity. Return values from `@forge-ahead/errors`
+`Result` are classified correctly:
+
+```ts
+export const handler = async (event: WebTriggerEvent) =>
+  log.invocation(event, async () => {
+    const result = await doWork(event);
+    return result;
+  });
+```
+
+Entry logging is opt-in via `logEntry: true`. Set `successLevel`, `errorLevel`,
+`successMessage`, `errorMessage`, and `summarizeResult` to control the completion
+record. The handler body inherits any ambient log context from the caller.
+
 ## `LOG_LEVEL`
 
 `createForgeLogger()` resolves its effective level in this order:
@@ -435,6 +455,9 @@ package.
   metadata thunk. `logger.isLevelEnabled(level)` checks whether a level is active.
 - `withLogContext(bindings, operation)` and `getLogContext()` manage ambient
   bindings that merge into every record emitted inside the scope.
+- `logger.invocation(event, handler, options?)` and `withForgeInvocationLogging(...)`
+  wrap a handler, log a completion record with `durationMs` and `outcome`, and
+  rethrow any error. `Result` return values are classified as success/failure.
 - `unwrapPinoLogger(logger)` exposes the underlying pino instance for interop.
 - `resolveLogLevel(env?)` and `getLogLevel(env?)` resolve `LOG_LEVEL`/`NODE_ENV`
   without logging as a side effect.

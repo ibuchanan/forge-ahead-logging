@@ -6,9 +6,9 @@
 
 **Status:** ready-for-agent
 
-- [ ] A wrapper such as `logger.invocation(event, handler)` or `withForgeInvocationLogging(logger, event, handler)` is available.
-- [ ] Success and failure each emit exactly one completion record containing `durationMs` and `outcome`.
-- [ ] Thrown or rejected values are logged and then re-thrown with the same identity.
-- [ ] `Result` values from `@forge-ahead/errors` are classified correctly: `Err` is logged as failure, not success.
-- [ ] Entry logging is opt-in and, when enabled, respects the existing level and `includeEventShape` gates.
-- [ ] The handler body inherits the ambient log context from the wrapper.
+- [x] A wrapper such as `logger.invocation(event, handler)` or `withForgeInvocationLogging(logger, event, handler)` is available.
+- [x] Success and failure each emit exactly one completion record containing `durationMs` and `outcome`.
+- [x] Thrown or rejected values are logged and then re-thrown with the same identity.
+- [x] `Result` values from `@forge-ahead/errors` are classified correctly: `Err` is logged as failure, not success.
+- [x] Entry logging is opt-in and, when enabled, respects the existing level and `includeEventShape` gates.
+- [x] The handler body inherits the ambient log context from the wrapper.

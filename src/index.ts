@@ -486,6 +486,128 @@ export function logForgeInvocation(
   logger[level](summary, message);
 }
 
+export interface ForgeInvocationLoggingOptions<T> {
+  logEntry?: boolean;
+  entryLevel?: "debug" | "info";
+  entryMessage?: string;
+  includeEventShape?: boolean;
+  successLevel?: "debug" | "info";
+  errorLevel?: "warn" | "error" | "fatal";
+  message?: string;
+  successMessage?: string;
+  errorMessage?: string;
+  summarizeResult?: (result: T) => Record<string, unknown>;
+}
+
+function isResult(value: unknown): value is Result<unknown, unknown> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as Result<unknown, unknown>).isOk === "function" &&
+    typeof (value as Result<unknown, unknown>).isErr === "function"
+  );
+}
+
+export function withForgeInvocationLogging<TEvent, TResult>(
+  logger: ForgeLogger,
+  event: TEvent,
+  handler: (event: TEvent) => TResult | Promise<TResult>,
+  options?: ForgeInvocationLoggingOptions<TResult>,
+): TResult | Promise<TResult> {
+  const baseMetadata = summarizeForgeInvocation(event);
+
+  if (options?.logEntry) {
+    logForgeInvocation(
+      logger,
+      event,
+      options.entryMessage ?? "invocation started",
+      {
+        level: options.entryLevel ?? "info",
+        includeEventShape: options.includeEventShape,
+      },
+    );
+  }
+
+  const start = Date.now();
+  const message = options?.message ?? "invocation completed";
+
+  function logCompletion(
+    level: "debug" | "info" | "warn" | "error" | "fatal",
+    outcome: "success" | "failure",
+    value: TResult | unknown,
+    messageText?: string,
+  ): void {
+    const durationMs = Date.now() - start;
+    const metadata: Record<string, unknown> = {
+      ...baseMetadata,
+      outcome,
+      durationMs,
+    };
+    if (
+      outcome === "success" &&
+      options?.summarizeResult &&
+      value !== undefined
+    ) {
+      Object.assign(metadata, options.summarizeResult(value as TResult));
+    }
+    logger[level](metadata, messageText ?? message);
+  }
+
+  function logFailure(error: unknown): never {
+    const durationMs = Date.now() - start;
+    const metadata = buildErrorMetadata(logger, error);
+    Object.assign(metadata, baseMetadata, { outcome: "failure", durationMs });
+    const level = options?.errorLevel ?? "error";
+    logger[level](metadata, options?.errorMessage ?? message);
+    throw error;
+  }
+
+  function handleReturn(value: TResult): TResult {
+    if (isResult(value)) {
+      if (value.isErr()) {
+        const durationMs = Date.now() - start;
+        const metadata = buildErrorMetadata(logger, value.error);
+        Object.assign(metadata, baseMetadata, {
+          outcome: "failure",
+          durationMs,
+        });
+        const level = options?.errorLevel ?? "error";
+        logger[level](metadata, options?.errorMessage ?? message);
+        return value;
+      }
+      const resultValue = value.value as TResult;
+      const successLevel = options?.successLevel ?? "info";
+      logCompletion(
+        successLevel,
+        "success",
+        resultValue,
+        options?.successMessage ?? message,
+      );
+      return value;
+    }
+    const successLevel = options?.successLevel ?? "info";
+    logCompletion(
+      successLevel,
+      "success",
+      value,
+      options?.successMessage ?? message,
+    );
+    return value;
+  }
+
+  try {
+    const result = handler(event);
+    if (isPromiseLike(result)) {
+      return result.then(handleReturn, logFailure) as
+        | TResult
+        | Promise<TResult>;
+    }
+    return handleReturn(result);
+  } catch (error) {
+    return logFailure(error);
+  }
+}
+
 export interface LogResultOptions<T, E> {
   message?: string;
   successMessage?: string;
@@ -708,6 +830,11 @@ export interface ForgeLogger {
     message?: string,
     options?: ForgeInvocationLogOptions,
   ): void;
+  invocation<TEvent, TResult>(
+    event: TEvent,
+    handler: (event: TEvent) => TResult | Promise<TResult>,
+    options?: ForgeInvocationLoggingOptions<TResult>,
+  ): TResult | Promise<TResult>;
   result<T, E = ProblemDetails>(
     result: Result<T, E>,
     options?: LogResultOptions<T, E>,
@@ -773,6 +900,8 @@ function wrapPinoLogger(pinoLogger: pino.Logger): ForgeLogger {
     child: (bindings) => wrapPinoLogger(pinoLogger.child(bindings)),
     forgeInvocation: (event, message, options) =>
       logForgeInvocation(forgeLogger, event, message, options),
+    invocation: (event, handler, options) =>
+      withForgeInvocationLogging(forgeLogger, event, handler, options),
     result: (result, options) => logResult(forgeLogger, result, options),
     errorResult: (error, options) => logError(forgeLogger, error, options),
     probe: (label, valueOrThunk, options) =>
