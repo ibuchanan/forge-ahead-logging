@@ -113,6 +113,27 @@ const severity = computeSeverity();
 logger.log(severity, { userId: "abc-123" }, "handled request");
 ```
 
+### Ambient log context
+
+`withLogContext(bindings, operation)` attaches bindings to every log record
+emitted inside the operation without passing a child logger through every
+function signature:
+
+```ts
+import { withLogContext } from "@forge-ahead/logging";
+
+await withLogContext({ requestId: "req-123", cloudId: "cloud-1" }, async () => {
+  await doWork();
+  log.info({ step: "done" }, "finished work");
+  // record contains { requestId, cloudId, step, msg }
+});
+```
+
+Explicit per-call metadata and `child()` bindings win over ambient bindings on
+the same key. Ambient values are summarized and redacted the same way as normal
+metadata. Context is empty outside any `withLogContext` scope and does not leak
+after the scope ends. Concurrent invocations are isolated.
+
 ## `LOG_LEVEL`
 
 `createForgeLogger()` resolves its effective level in this order:
@@ -412,6 +433,8 @@ package.
   for named loggers, custom redaction, or injected `env`.
 - Level methods accept object-first metadata, a message-only string, or a lazy
   metadata thunk. `logger.isLevelEnabled(level)` checks whether a level is active.
+- `withLogContext(bindings, operation)` and `getLogContext()` manage ambient
+  bindings that merge into every record emitted inside the scope.
 - `unwrapPinoLogger(logger)` exposes the underlying pino instance for interop.
 - `resolveLogLevel(env?)` and `getLogLevel(env?)` resolve `LOG_LEVEL`/`NODE_ENV`
   without logging as a side effect.

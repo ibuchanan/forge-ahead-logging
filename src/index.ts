@@ -1,5 +1,6 @@
 import type { ProblemDetails, Result } from "@forge-ahead/errors";
 import { toProblemDetails } from "@forge-ahead/errors";
+import { AsyncLocalStorage } from "node:async_hooks";
 import pino from "pino";
 
 export type ForgeLogLevel =
@@ -53,6 +54,21 @@ export function getLogLevel(
   env: Record<string, string | undefined> = process.env,
 ): ForgeLogLevel {
   return resolveLogLevel(env).level;
+}
+
+const ambientContext = new AsyncLocalStorage<Record<string, unknown>>();
+
+export function getLogContext(): Record<string, unknown> {
+  return ambientContext.getStore() ?? {};
+}
+
+export function withLogContext<T>(
+  bindings: Record<string, unknown>,
+  operation: () => T | Promise<T>,
+): T | Promise<T> {
+  const parent = ambientContext.getStore();
+  const merged = parent ? { ...parent, ...bindings } : bindings;
+  return ambientContext.run(merged, operation);
 }
 
 /**
@@ -706,34 +722,47 @@ export interface ForgeLogger {
 
 const underlyingPinoLoggers = new WeakMap<ForgeLogger, pino.Logger>();
 
-function resolveLogMethodArg(
+function resolveLogCall(
   obj: Record<string, unknown> | string | (() => Record<string, unknown>),
   level: ForgeLogLevel,
   pinoLogger: pino.Logger,
-): Record<string, unknown> | string {
+): { obj: Record<string, unknown>; message?: string } {
+  let resolved: Record<string, unknown> | string;
   if (typeof obj === "function") {
     if (!pinoLogger.isLevelEnabled(level)) {
-      return {};
+      return { obj: {} };
     }
-    return obj();
+    resolved = obj();
+  } else {
+    resolved = obj;
   }
-  return obj;
+
+  const ambient = getLogContext();
+  const base = pinoLogger.bindings();
+  if (typeof resolved === "string") {
+    return { obj: { ...ambient, ...base }, message: resolved };
+  }
+  return { obj: { ...ambient, ...base, ...resolved } };
+}
+
+function logWithLevel(
+  pinoLogger: pino.Logger,
+  level: ForgeLogLevel,
+  obj: Record<string, unknown> | string | (() => Record<string, unknown>),
+  message: string | undefined,
+): void {
+  const resolved = resolveLogCall(obj, level, pinoLogger);
+  pinoLogger[level](resolved.obj, message ?? resolved.message);
 }
 
 function wrapPinoLogger(pinoLogger: pino.Logger): ForgeLogger {
   const forgeLogger: ForgeLogger = {
-    fatal: (obj, message) =>
-      pinoLogger.fatal(resolveLogMethodArg(obj, "fatal", pinoLogger), message),
-    error: (obj, message) =>
-      pinoLogger.error(resolveLogMethodArg(obj, "error", pinoLogger), message),
-    warn: (obj, message) =>
-      pinoLogger.warn(resolveLogMethodArg(obj, "warn", pinoLogger), message),
-    info: (obj, message) =>
-      pinoLogger.info(resolveLogMethodArg(obj, "info", pinoLogger), message),
-    debug: (obj, message) =>
-      pinoLogger.debug(resolveLogMethodArg(obj, "debug", pinoLogger), message),
-    trace: (obj, message) =>
-      pinoLogger.trace(resolveLogMethodArg(obj, "trace", pinoLogger), message),
+    fatal: (obj, message) => logWithLevel(pinoLogger, "fatal", obj, message),
+    error: (obj, message) => logWithLevel(pinoLogger, "error", obj, message),
+    warn: (obj, message) => logWithLevel(pinoLogger, "warn", obj, message),
+    info: (obj, message) => logWithLevel(pinoLogger, "info", obj, message),
+    debug: (obj, message) => logWithLevel(pinoLogger, "debug", obj, message),
+    trace: (obj, message) => logWithLevel(pinoLogger, "trace", obj, message),
     log: (level, obj, message) => {
       if (!isForgeLogLevel(level)) {
         return;
