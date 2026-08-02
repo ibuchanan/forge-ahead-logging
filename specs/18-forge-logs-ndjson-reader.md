@@ -4,7 +4,7 @@
 
 **Blocked by:** 03 — Emit string level labels instead of numeric levels.
 
-**Status:** ready-for-agent
+**Status:** deferred
 
 - [ ] A reader accepts NDJSON lines from `forge logs` and returns typed records.
 - [ ] It can filter by level and project fields.

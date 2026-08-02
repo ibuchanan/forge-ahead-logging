@@ -632,6 +632,13 @@ package.
   subpath returns a `{ logger, records }` test helper; it is not exported from the
   root package.
 
+## Downstream integration
+
+See [specs/downstream-integration-work.md](specs/downstream-integration-work.md)
+for the migration plan for existing `forge-ahead` consumers, the `repo-init`
+template follow-up for `LOG_LEVEL`, and the `forge-prelint` rule for detecting
+apps that depend on this package without wiring `LOG_LEVEL`.
+
 ## Development
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) for local setup, package scripts, and
