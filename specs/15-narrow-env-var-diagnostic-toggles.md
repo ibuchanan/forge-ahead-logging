@@ -4,10 +4,10 @@
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** implemented
 
-- [ ] A documented set of env-var toggles enables bounded diagnostics such as label inclusion or `includeEventShape`.
-- [ ] Each toggle is default-off and only takes effect when the current log level would already emit the record.
-- [ ] An env var cannot widen what a level already refuses to emit.
-- [ ] `resolveLogLevel()` continues to report the source and invalid values without emitting log records.
-- [ ] README explains the intended short-lived debugging workflow.
+- [x] `FORGE_LOG_LABELS` and `FORGE_LOG_EVENT_SHAPE` enable bounded diagnostics for label inclusion and invocation event shape.
+- [x] Each toggle is default-off and only takes effect when the current log level already allows the record.
+- [x] `FORGE_LOG_EVENT_SHAPE` cannot bypass the debug/trace gate; it only includes the event shape when the logger's level is verbose.
+- [x] `resolveLogLevel()` continues to report the level source and invalid values without emitting log records.
+- [x] README explains the intended short-lived debugging workflow.

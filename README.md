@@ -292,8 +292,8 @@ summarizeObjectForLog(deployment, deploymentPolicy, { includeLabels: true });
 
 Fields are included by default; `labels` (human-readable, possibly
 customer-identifying text) are excluded unless a caller opts in with
-`includeLabels: true`. Fields missing from the source value are omitted
-rather than emitted as `undefined`.
+`includeLabels: true` or sets `FORGE_LOG_LABELS=true`. Fields missing from the
+source value are omitted rather than emitted as `undefined`.
 
 Each field selection can apply a built-in Field Transform instead of the
 default `identity` summary:
@@ -307,6 +307,28 @@ default `identity` summary:
 
 Custom extractor callbacks are intentionally not supported — a selection is
 always a field path plus, optionally, one of these four transforms.
+
+## Diagnostic env-var toggles
+
+A small set of env-var toggles widens diagnostic metadata only when the
+effective log level already allows the record. They are default-off and are
+intended for short-lived debugging, not for leaving on in production:
+
+- `FORGE_LOG_LABELS=true` includes `labels` in Object Summary Policy output when
+  calling `summarizeObjectForLog()` (or `summarizeForgeInvocation()`).
+- `FORGE_LOG_EVENT_SHAPE=true` includes the full bounded event shape in
+  `logForgeInvocation()` output when the logger's effective level is `debug` or
+  `trace`.
+
+Set these alongside `LOG_LEVEL=debug` for a focused debugging session, then
+unset them:
+
+```sh
+LOG_LEVEL=debug FORGE_LOG_EVENT_SHAPE=1 node script.js
+```
+
+These toggles never change the resolved level; they only add metadata when the
+level already emits the record.
 
 ## Forge invocation logging
 
@@ -336,6 +358,10 @@ logForgeInvocation(logger, event, "handling request", {
 // at info:  { ..., eventShapeOmitted: "requires debug or trace" }
 // at debug: { ..., eventShape: { /* bounded, summarized event */ } }
 ```
+
+`FORGE_LOG_EVENT_SHAPE=true` enables the same bounded event shape at `debug` or
+`trace` without changing application code; it does not add the omitted marker
+or bypass the level gate.
 
 ## Result and Error logging
 
@@ -557,12 +583,13 @@ package.
 - `summarizeForLog(value, options?)` produces JSON-safe, bounded,
   depth/size-limited summaries of arbitrary values.
 - `defineLogObjectSummaryPolicy(policy)` and
-  `summarizeObjectForLog(value, policy, options?)` implement Object Summary
+  `summarizeObjectForLog(value, policy, options?, env?)` implement Object Summary
   Policies and the `identity`/`redact`/`tokenPreview`/`omittedShape` Field
-  Transforms.
-- `FORGE_EVENT_SUMMARY_POLICY`, `summarizeForgeInvocation(event, options?)`,
-  `logForgeInvocation(logger, event, message?, options?)`, and
+  Transforms. `FORGE_LOG_LABELS=true` defaults `includeLabels` to true.
+- `FORGE_EVENT_SUMMARY_POLICY`, `summarizeForgeInvocation(event, options?, env?)`,
+  `logForgeInvocation(logger, event, message?, options?, env?)`, and
   `logger.forgeInvocation(...)` cover Forge invocation logging.
+  `FORGE_LOG_EVENT_SHAPE=true` includes the event shape at `debug`/`trace`.
 - `logResult(logger, result, options?)`, `logError(logger, error, options?)`,
   `logger.result(...)`, and `logger.errorResult(...)` cover Result/Error logging,
   integrated with `@forge-ahead/errors`.

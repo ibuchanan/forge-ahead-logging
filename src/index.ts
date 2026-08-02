@@ -463,13 +463,16 @@ export function summarizeObjectForLog(
   value: unknown,
   policy: LogObjectSummaryPolicy,
   options?: LogObjectSummaryOptions,
+  env: Record<string, string | undefined> = process.env,
 ): Record<string, unknown> {
   const resolvedOptions: Required<LogValueSummaryOptions> = {
     ...DEFAULT_LOG_VALUE_SUMMARY_OPTIONS,
     ...options,
   };
+  const includeLabels =
+    options?.includeLabels ?? env.FORGE_LOG_LABELS === "true";
   const labels =
-    options?.includeLabels && policy.labels
+    includeLabels && policy.labels
       ? summarizeFieldMap(value, policy.labels, resolvedOptions)
       : {};
   return {
@@ -511,8 +514,9 @@ export const FORGE_EVENT_SUMMARY_POLICY = defineLogObjectSummaryPolicy({
 export function summarizeForgeInvocation(
   event: unknown,
   options?: LogValueSummaryOptions,
+  env: Record<string, string | undefined> = process.env,
 ): Record<string, unknown> {
-  return summarizeObjectForLog(event, FORGE_EVENT_SUMMARY_POLICY, options);
+  return summarizeObjectForLog(event, FORGE_EVENT_SUMMARY_POLICY, options, env);
 }
 
 export interface ForgeInvocationLogOptions extends LogValueSummaryOptions {
@@ -524,20 +528,36 @@ function isVerboseLevelEnabled(logger: ForgeLogger): boolean {
   return unwrapPinoLogger(logger).isLevelEnabled("debug");
 }
 
+function computeEventShape(
+  logger: ForgeLogger,
+  event: unknown,
+  options: ForgeInvocationLogOptions | undefined,
+  env: Record<string, string | undefined>,
+): Record<string, unknown> {
+  const isVerbose = isVerboseLevelEnabled(logger);
+  if (options?.includeEventShape !== undefined) {
+    if (options.includeEventShape) {
+      return isVerbose
+        ? { eventShape: summarizeForLog(event, options) }
+        : { eventShapeOmitted: "requires debug or trace" };
+    }
+    return {};
+  }
+  if (env.FORGE_LOG_EVENT_SHAPE === "true" && isVerbose) {
+    return { eventShape: summarizeForLog(event, options) };
+  }
+  return {};
+}
+
 export function logForgeInvocation(
   logger: ForgeLogger,
   event: unknown,
   message?: string,
   options?: ForgeInvocationLogOptions,
+  env: Record<string, string | undefined> = process.env,
 ): void {
-  const summary = summarizeForgeInvocation(event, options);
-  if (options?.includeEventShape) {
-    if (isVerboseLevelEnabled(logger)) {
-      summary.eventShape = summarizeForLog(event, options);
-    } else {
-      summary.eventShapeOmitted = "requires debug or trace";
-    }
-  }
+  const summary = summarizeForgeInvocation(event, options, env);
+  Object.assign(summary, computeEventShape(logger, event, options, env));
   const level = options?.level ?? "info";
   logger[level](summary, message);
 }
