@@ -1,26 +1,23 @@
 import { describe, expect, it } from "vitest";
 import {
-  createForgeLogger,
   DEFAULT_REDACT_PATHS,
   DEFAULT_REDACTION_CENSOR,
   withDefaultRedaction,
 } from "../src/index";
-import { captureForgeLoggerOutput } from "./helpers/capture-forge-logger-output";
-
-const { loggedRecords } = captureForgeLoggerOutput();
+import { createCapturingLogger } from "../src/testing";
 
 describe("createForgeLogger default redaction", () => {
   it("censors a representative secret-shaped field but keeps the key present", () => {
-    const logger = createForgeLogger({ env: {} });
+    const { logger, records } = createCapturingLogger({ env: {} });
 
     logger.info({ password: "hunter2" }, "logging in");
 
-    const [record] = loggedRecords();
+    const [record] = records;
     expect(record.password).toBe("[redacted]");
   });
 
   it("censors a nested secret-shaped field while keeping sibling fields and shape intact", () => {
-    const logger = createForgeLogger({ env: {} });
+    const { logger, records } = createCapturingLogger({ env: {} });
 
     logger.info(
       {
@@ -29,14 +26,14 @@ describe("createForgeLogger default redaction", () => {
       "incoming request",
     );
 
-    const [record] = loggedRecords();
+    const [record] = records;
     const headers = record.headers as Record<string, unknown>;
     expect(headers.authorization).toBe("[redacted]");
     expect(headers["content-type"]).toBe("json");
   });
 
   it("merges a caller-supplied redact option with the defaults", () => {
-    const logger = createForgeLogger({
+    const { logger, records } = createCapturingLogger({
       env: {},
       redact: ["customSecretField"],
     });
@@ -46,7 +43,7 @@ describe("createForgeLogger default redaction", () => {
       "custom + default redaction",
     );
 
-    const [record] = loggedRecords();
+    const [record] = records;
     expect(record.customSecretField).toBe("[redacted]");
     expect(record.password).toBe("[redacted]");
   });

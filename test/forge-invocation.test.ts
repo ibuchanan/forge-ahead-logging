@@ -1,13 +1,7 @@
 import pino from "pino";
 import { describe, expect, it } from "vitest";
-import {
-  createForgeLogger,
-  logForgeInvocation,
-  summarizeForgeInvocation,
-} from "../src/index";
-import { captureForgeLoggerOutput } from "./helpers/capture-forge-logger-output";
-
-const { loggedRecords } = captureForgeLoggerOutput();
+import { logForgeInvocation, summarizeForgeInvocation } from "../src/index";
+import { createCapturingLogger } from "../src/testing";
 
 describe("summarizeForgeInvocation", () => {
   it("matches the spec's Forge event summary example", () => {
@@ -61,12 +55,12 @@ describe("summarizeForgeInvocation", () => {
 
 describe("logForgeInvocation", () => {
   it("logs the policy-selected summary at info by default", () => {
-    const logger = createForgeLogger({ env: {} });
+    const { logger, records } = createCapturingLogger({ env: {} });
     const event = { eventType: "avi:jira:created:issue", method: "POST" };
 
     logForgeInvocation(logger, event, "invocation received");
 
-    const [record] = loggedRecords();
+    const [record] = records;
     expect(record.level).toBe(pino.levels.values.info);
     expect(record.msg).toBe("invocation received");
     expect(record.eventType).toBe("avi:jira:created:issue");
@@ -74,20 +68,22 @@ describe("logForgeInvocation", () => {
   });
 
   it("omits the event shape at info and includes eventShapeOmitted instead", () => {
-    const logger = createForgeLogger({ env: {} });
+    const { logger, records } = createCapturingLogger({ env: {} });
     const event = { eventType: "avi:jira:created:issue", secret: "shh" };
 
     logForgeInvocation(logger, event, "invocation received", {
       includeEventShape: true,
     });
 
-    const [record] = loggedRecords();
+    const [record] = records;
     expect(record.eventShape).toBeUndefined();
     expect(record.eventShapeOmitted).toBe("requires debug or trace");
   });
 
   it("includes the full bounded event shape at debug", () => {
-    const logger = createForgeLogger({ env: { LOG_LEVEL: "debug" } });
+    const { logger, records } = createCapturingLogger({
+      env: { LOG_LEVEL: "debug" },
+    });
     const event = { eventType: "avi:jira:created:issue", secret: "shh" };
 
     logForgeInvocation(logger, event, "invocation received", {
@@ -95,7 +91,7 @@ describe("logForgeInvocation", () => {
       level: "debug",
     });
 
-    const [record] = loggedRecords();
+    const [record] = records;
     expect(record.eventShapeOmitted).toBeUndefined();
     expect(record.eventShape).toEqual({
       eventType: "avi:jira:created:issue",
@@ -106,12 +102,12 @@ describe("logForgeInvocation", () => {
 
 describe("logger.forgeInvocation", () => {
   it("delegates to logForgeInvocation", () => {
-    const logger = createForgeLogger({ env: {} });
+    const { logger, records } = createCapturingLogger({ env: {} });
     const event = { eventType: "avi:jira:created:issue", method: "POST" };
 
     logger.forgeInvocation(event, "invocation received");
 
-    const [record] = loggedRecords();
+    const [record] = records;
     expect(record.level).toBe(pino.levels.values.info);
     expect(record.eventType).toBe("avi:jira:created:issue");
   });

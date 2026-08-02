@@ -4,6 +4,7 @@ export default defineConfig({
   entry: {
     index: "./src/index.ts",
     demo: "./src/demo.ts",
+    testing: "./src/testing.ts",
   },
   format: ["esm", "cjs"],
   sourcemap: true,

@@ -1,0 +1,4 @@
+{
+  "main": "../dist/testing.mjs",
+  "types": "../dist/testing.d.mts"
+}

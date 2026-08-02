@@ -24,13 +24,24 @@
         "types": "./dist/demo.d.cts",
         "default": "./dist/demo.cjs"
       }
+    },
+    "./testing": {
+      "import": {
+        "types": "./dist/testing.d.mts",
+        "default": "./dist/testing.mjs"
+      },
+      "require": {
+        "types": "./dist/testing.d.cts",
+        "default": "./dist/testing.cjs"
+      }
     }
   },
   "main": "dist/index.cjs",
   "types": "dist/index.d.mts",
   "files": [
     "dist",
-    "demo/package.json"
+    "demo/package.json",
+    "testing/package.json"
   ],
   "scripts": {
     "build": "tsdown",

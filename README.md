@@ -328,6 +328,31 @@ supplied, is summarized and redacted the same way as everywhere else in this
 package, via `summarizeForLog()`. Use a distinct `storyId` per narrative
 thread; nested or child narratives are not supported in this version.
 
+## Testing helpers
+
+A public testing subpath lets tests assert against real log records without
+mocking global `console.*` or re-implementing log capture. The captured records
+flow through the same redaction, summary, and level-gating logic as the
+production logger, so tests can verify that sensitive fields are redacted:
+
+```ts
+import { createCapturingLogger } from "@forge-ahead/logging/testing";
+
+const { logger, records } = createCapturingLogger({ env: { LOG_LEVEL: "debug" } });
+
+logger.info({ userId: "abc-123", token: "shh" }, "handled request");
+
+const [record] = records;
+expect(record.userId).toBe("abc-123");
+expect(record.token).toBe("[redacted]");
+```
+
+`createCapturingLogger(options?)` accepts the same `ForgeLoggerOptions` as
+`createForgeLogger()`. The returned `records` array contains the parsed JSON
+records emitted by that logger. The helper is only exported from the
+`@forge-ahead/logging/testing` subpath; it is not available from the root
+package.
+
 ## API Surface
 
 - `createForgeLogger(options?)` returns a `ForgeLogger`; `unwrapPinoLogger(logger)`
@@ -353,6 +378,9 @@ thread; nested or child narratives are not supported in this version.
 - `createDemoNarrative(logger, { storyId })` from the `@forge-ahead/logging/demo`
   subpath implements Demo Narrative Logging; it is not exported from the root
   package.
+- `createCapturingLogger(options?)` from the `@forge-ahead/logging/testing`
+  subpath returns a `{ logger, records }` test helper; it is not exported from
+  the root package.
 
 ## Development
 

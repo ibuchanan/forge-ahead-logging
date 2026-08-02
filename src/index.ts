@@ -774,6 +774,7 @@ function createForgeDestination(): pino.DestinationStream {
 
 export function createForgeLogger(
   options: ForgeLoggerOptions = {},
+  destination: pino.DestinationStream = createForgeDestination(),
 ): ForgeLogger {
   const env = options.env ?? process.env;
   const { level } = resolveLogLevel(env);
@@ -784,7 +785,7 @@ export function createForgeLogger(
       base: options.base ?? {},
       redact: withDefaultRedaction(options.redact),
     },
-    createForgeDestination(),
+    destination,
   );
   return wrapPinoLogger(pinoLogger);
 }
