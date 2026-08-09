@@ -421,6 +421,25 @@ logResult(logger, result, {
 });
 ```
 
+Domain errors that follow the `{ code: string }` shape common in
+`neverthrow`-based domain cores are logged as structured metadata instead of
+being wrapped as a generic 500. The record includes `errorCode`, a `title` when
+the error also has a `message` string, and any other own enumerable fields
+summarized by `summarizeForLog()`:
+
+```ts
+logResult(logger, err({ code: "invalid-seed-request", role: "admin" }), {
+  errorMessage: "Supplychain Graph demo pairing seed failed",
+  errorLevel: "info",
+  summarizeErr: (error) => ({ event: "scg.demo.pairing.seed.failed" }),
+});
+// { level: "info", msg: "...", errorCode: "invalid-seed-request",
+//   role: "admin", event: "scg.demo.pairing.seed.failed" }
+```
+
+Domain errors never log full stack traces, even when the effective level is
+`debug` or `trace`.
+
 `logError()` is the equivalent helper for `catch` blocks, normalizing any
 thrown value through `@forge-ahead/errors`' `toProblemDetails()`:
 
@@ -444,6 +463,26 @@ records, and `AggregateError.errors` is summarized as a bounded `errors`
 array. Cycles are detected and terminate the chain. `logger.result(result,
 options)` and `logger.errorResult(error, options)` are the equivalent logger
 methods.
+
+## MinimalLogger
+
+Domain observability code can depend on the small `MinimalLogger` interface
+instead of the full `ForgeLogger` type:
+
+```ts
+import type { MinimalLogger } from "@forge-ahead/logging";
+
+export function logGraphPublishResult(
+  logger: MinimalLogger,
+  event: GraphPublishResultEvent,
+): void {
+  logger.info({ event: "scg.graph.publish.completed", ... }, "...");
+}
+```
+
+`MinimalLogger` exposes `info` and `error` as required methods, with optional
+`warn` and `debug`. `ForgeLogger` is assignable to `MinimalLogger`, so callers
+can pass a full `ForgeLogger` without any conversion.
 
 ## Debug Probe
 
@@ -619,7 +658,10 @@ package.
   `FORGE_LOG_EVENT_SHAPE=true` includes the event shape at `debug`/`trace`.
 - `logResult(logger, result, options?)`, `logError(logger, error, options?)`,
   `logger.result(...)`, and `logger.errorResult(...)` cover Result/Error logging,
-  integrated with `@forge-ahead/errors`.
+  integrated with `@forge-ahead/errors`. Domain errors shaped as `{ code: string }`
+  are logged as structured `errorCode` metadata instead of a synthesized 500.
+- `MinimalLogger` is the small upstream logger interface for domain
+  observability code that does not want to depend on the full `ForgeLogger`.
 - `logProbe(logger, label, valueOrThunk, options?)` and `logger.probe(...)`
   implement Debug Probe.
 - `installConsoleCapture(logger)` redirects `console.log`/`console.error` from

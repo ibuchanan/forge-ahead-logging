@@ -1,6 +1,11 @@
 import { err, ok, type ProblemDetails } from "@forge-ahead/errors";
 import { describe, expect, it } from "vitest";
-import { logError, logResult } from "../src/index";
+import {
+  logError,
+  logResult,
+  type ForgeLogger,
+  type MinimalLogger,
+} from "../src/index";
 import { createCapturingLogger } from "../src/testing";
 
 describe("logResult", () => {
@@ -95,6 +100,107 @@ describe("logResult err branch", () => {
     const [record] = records;
     expect(record.retryable).toBe(true);
     expect(record.status).toBe(404);
+  });
+});
+
+describe("logResult domain errors", () => {
+  it("logs a { code: string } error with errorCode instead of a synthesized 500", () => {
+    const { logger, records } = createCapturingLogger({ env: {} });
+
+    logResult(logger, err({ code: "invalid-seed-request" }));
+
+    const [record] = records;
+    expect(record.level).toBe("error");
+    expect(record.errorCode).toBe("invalid-seed-request");
+    expect(record.status).toBeUndefined();
+    expect(record.type).toBeUndefined();
+  });
+
+  it("uses message as title when the domain error has a string message", () => {
+    const { logger, records } = createCapturingLogger({ env: {} });
+
+    logResult(
+      logger,
+      err({ code: "invalid-seed-request", message: "Bad seed" }),
+    );
+
+    const [record] = records;
+    expect(record.errorCode).toBe("invalid-seed-request");
+    expect(record.title).toBe("Bad seed");
+    expect(record.message).toBeUndefined();
+  });
+
+  it("summarizes other own enumerable fields and includes them in the record", () => {
+    const { logger, records } = createCapturingLogger({ env: {} });
+    const error = {
+      code: "invalid-seed-request",
+      role: "admin",
+      nested: { id: 1, secret: "shh" },
+      items: ["a", "b", "c"],
+    };
+
+    logResult(logger, err(error));
+
+    const [record] = records;
+    expect(record.errorCode).toBe("invalid-seed-request");
+    expect(record.role).toBe("admin");
+    expect(record.nested).toEqual({ id: 1, secret: "[redacted]" });
+    expect(record.items).toEqual(["a", "b", "c"]);
+  });
+
+  it("does not treat a numeric code as a domain error", () => {
+    const { logger, records } = createCapturingLogger({ env: {} });
+
+    logResult(logger, err({ code: 409 }));
+
+    const [record] = records;
+    expect(record.status).toBe(500);
+    expect(record.errorCode).toBeUndefined();
+  });
+
+  it("does not treat a string error as a domain error", () => {
+    const { logger, records } = createCapturingLogger({ env: {} });
+
+    logResult(logger, err("boom"));
+
+    const [record] = records;
+    expect(record.status).toBe(500);
+    expect(record.errorCode).toBeUndefined();
+  });
+
+  it("merges summarizeErr metadata alongside domain error fields", () => {
+    const { logger, records } = createCapturingLogger({ env: {} });
+
+    logResult(logger, err({ code: "invalid-seed-request" }), {
+      summarizeErr: () => ({ event: "seed.failed", role: "admin" }),
+    });
+
+    const [record] = records;
+    expect(record.errorCode).toBe("invalid-seed-request");
+    expect(record.event).toBe("seed.failed");
+    expect(record.role).toBe("admin");
+  });
+
+  it("does not log full stack traces for domain errors", () => {
+    const { logger, records } = createCapturingLogger({
+      env: { LOG_LEVEL: "debug" },
+    });
+    const error = Object.assign(new Error("domain boom"), {
+      code: "domain-error",
+    });
+
+    logResult(logger, err(error));
+
+    const [record] = records;
+    expect(record.errorCode).toBe("domain-error");
+    expect(record.stack).toBeUndefined();
+  });
+});
+
+describe("MinimalLogger type assertion", () => {
+  it("is satisfied by ForgeLogger", () => {
+    const _typeCheck: MinimalLogger = {} as ForgeLogger;
+    expect(_typeCheck).toBeDefined();
   });
 });
 

@@ -1,5 +1,5 @@
 import type { ProblemDetails, Result } from "@forge-ahead/errors";
-import { toProblemDetails } from "@forge-ahead/errors";
+import { isProblemDetails, toProblemDetails } from "@forge-ahead/errors";
 import { AsyncLocalStorage } from "node:async_hooks";
 import pino from "pino";
 
@@ -742,11 +742,48 @@ function buildErrorMetadataSummary(
   return metadata;
 }
 
+function isDomainError(
+  error: unknown,
+): error is { code: string } & Record<string, unknown> {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    typeof (error as { code: unknown }).code === "string"
+  );
+}
+
+function buildDomainErrorMetadata(
+  error: { code: string } & Record<string, unknown>,
+): Record<string, unknown> {
+  const metadata: Record<string, unknown> = {
+    errorCode: error.code,
+  };
+  if (typeof error.message === "string") {
+    metadata.title = error.message;
+  }
+  for (const [key, value] of Object.entries(error)) {
+    if (key === "code" || key === "message") {
+      continue;
+    }
+    metadata[key] = summarizeForLog(value);
+  }
+  return metadata;
+}
+
 function buildErrorMetadata(
   logger: ForgeLogger,
   error: unknown,
   status?: number,
 ): Record<string, unknown> {
+  if (isProblemDetails(error)) {
+    return approvedProblemFields(toProblemDetails(error, status));
+  }
+
+  if (isDomainError(error)) {
+    return buildDomainErrorMetadata(error);
+  }
+
   const metadata = buildErrorMetadataSummary(logger, error, status);
 
   if (
@@ -934,6 +971,17 @@ export type LogMethod = (
   message?: string,
   ...args: unknown[]
 ) => void;
+
+/**
+ * A small upstream logger contract for domain observability code that does not
+ * want to depend on the full `ForgeLogger` interface.
+ */
+export interface MinimalLogger {
+  readonly info: LogMethod;
+  readonly error: LogMethod;
+  readonly warn?: LogMethod;
+  readonly debug?: LogMethod;
+}
 
 export type ForgeTimestampFormat = "epoch" | "iso";
 
