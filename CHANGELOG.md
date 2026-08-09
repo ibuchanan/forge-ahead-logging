@@ -1,3 +1,13 @@
+## [0.4.0] - 2026-08-09
+
+### 🚀 Features
+
+- *(logging)* Add domain-error logging and MinimalLogger interface
+
+### ⚙️ Miscellaneous Tasks
+
+- *(specs)* Remove used up specs
+
 ## [0.3.0] - 2026-08-02
 
 ### 🚀 Features
