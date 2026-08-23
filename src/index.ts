@@ -1226,6 +1226,46 @@ function formatPrettyLine(chunk: string): string {
     : `${timestamp} ${level} ${message}`;
 }
 
+const PRIORITY_LOG_KEYS = ["level", "time", "msg"] as const;
+
+function orderLogRecord(
+  record: Record<string, unknown>,
+): Record<string, unknown> {
+  return Object.fromEntries([
+    ...PRIORITY_LOG_KEYS.filter((key) => key in record).map((key) => [
+      key,
+      record[key],
+    ]),
+    ...Object.entries(record).filter(
+      ([key]) =>
+        !PRIORITY_LOG_KEYS.includes(key as (typeof PRIORITY_LOG_KEYS)[number]),
+    ),
+  ]);
+}
+
+function createOrderedDestination(
+  destination: pino.DestinationStream,
+): pino.DestinationStream {
+  const wrapper: ForgeDestination = {
+    get lastLevel(): number {
+      return (destination as ForgeDestination).lastLevel;
+    },
+    set lastLevel(value: number) {
+      (destination as ForgeDestination).lastLevel = value;
+    },
+    write(chunk: string): void {
+      const newline = chunk.endsWith("\n") ? "\n" : "";
+      const line = newline ? chunk.slice(0, -1) : chunk;
+      const record = JSON.parse(line) as Record<string, unknown>;
+      destination.write(`${JSON.stringify(orderLogRecord(record))}${newline}`);
+    },
+  };
+  (wrapper as unknown as Record<symbol, boolean>)[
+    pino.symbols.needsMetadataGsym
+  ] = true;
+  return wrapper;
+}
+
 function createPrettyDestination(
   destination: pino.DestinationStream,
 ): pino.DestinationStream {
@@ -1347,9 +1387,11 @@ export function createForgeLogger(
 ): ForgeLogger {
   const env = options.env ?? process.env;
   const { level } = resolveLogLevel(options.name, env);
-  const effectiveDestination = isPrettyEnabled(options, env)
-    ? createPrettyDestination(destination)
-    : destination;
+  const effectiveDestination = createOrderedDestination(
+    isPrettyEnabled(options, env)
+      ? createPrettyDestination(destination)
+      : destination,
+  );
   const pinoLogger = pino(
     {
       level,

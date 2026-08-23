@@ -33,14 +33,21 @@ describe("pretty mode", () => {
     expect(line).toContain("INFO");
   });
 
-  it("produces NDJSON when pretty mode is disabled", () => {
+  it("produces NDJSON with core keys first when pretty mode is disabled", () => {
     const { logger, lines } = createStringCapturingLogger({ pretty: false });
 
-    logger.info({ userId: "u-123" }, "handling request");
+    logger.info({ userId: "u-123", requestId: "r-456" }, "handling request");
 
     const parsed = JSON.parse(lines[0]);
     expect(parsed.msg).toBe("handling request");
     expect(parsed.userId).toBe("u-123");
+    expect(Object.keys(parsed)).toEqual([
+      "level",
+      "time",
+      "msg",
+      "userId",
+      "requestId",
+    ]);
   });
 
   it("does not include ANSI color codes in pretty output", () => {
