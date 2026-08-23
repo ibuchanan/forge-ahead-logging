@@ -1,3 +1,13 @@
+## [0.4.1] - 2026-08-23
+
+### 🐛 Bug Fixes
+
+- *(logging)* Order core log keys
+
+### 📚 Documentation
+
+- Restructure documentation around Diataxis
+
 ## [0.4.0] - 2026-08-09
 
 ### 🚀 Features
