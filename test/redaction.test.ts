@@ -400,6 +400,29 @@ describe("createForgeLogger default redaction", () => {
   });
 });
 
+describe("pino's own redaction backstop", () => {
+  // Pino matches paths case-sensitively, so only the canonical spellings are
+  // guaranteed when something logs through the underlying pino logger directly.
+  const headerCasings = ["Authorization", "Cookie", "Set-Cookie"];
+
+  it.each([...secretKeys, ...headerCasings])(
+    "censors %s at the top level and one level deep",
+    (key) => {
+      const { logger, records } = createCapturingLogger();
+
+      unwrapPinoLogger(logger).info({
+        [key]: "private",
+        nested: { [key]: "private" },
+      });
+
+      expect(records[0]).toMatchObject({
+        [key]: DEFAULT_REDACTION_CENSOR,
+        nested: { [key]: DEFAULT_REDACTION_CENSOR },
+      });
+    },
+  );
+});
+
 describe("withDefaultRedaction", () => {
   it("merges caller paths with the defaults", () => {
     const result = withDefaultRedaction(["custom.secretField"]);

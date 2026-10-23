@@ -1,35 +1,14 @@
 import type pino from "pino";
 
-/**
- * A best-effort backstop against representative secret-shaped fields, not a
- * complete model of every Forge or Atlassian payload. Allow-list logging
- * through Object Summary Policies remains the primary leak-prevention
- * mechanism.
- */
-export const DEFAULT_REDACT_PATHS: readonly string[] = [
-  "*.authorization",
-  "*.Authorization",
-  "*.cookie",
-  "*.Cookie",
-  "*.set-cookie",
-  "*.Set-Cookie",
-  "*.token",
-  "*.accessToken",
-  "*.refreshToken",
-  "*.contextToken",
-  "*.jwt",
-  "*.apiKey",
-  "*.api_key",
-  "*.password",
-  "*.secret",
-  "*.clientSecret",
-  "*.client_secret",
+/** Secret-shaped key names. The one source for pino's paths and for key matching. */
+const SECRET_KEYS = [
   "authorization",
-  "Authorization",
-  "contextToken",
+  "cookie",
+  "set-cookie",
   "token",
   "accessToken",
   "refreshToken",
+  "contextToken",
   "jwt",
   "apiKey",
   "api_key",
@@ -37,7 +16,22 @@ export const DEFAULT_REDACT_PATHS: readonly string[] = [
   "secret",
   "clientSecret",
   "client_secret",
-];
+] as const;
+
+// Pino matches paths case-sensitively, so the conventional HTTP header casings
+// need their own paths. Our own key matching is case-insensitive.
+const HEADER_CASINGS = ["Authorization", "Cookie", "Set-Cookie"] as const;
+
+/**
+ * A best-effort backstop against representative secret-shaped fields, not a
+ * complete model of every Forge or Atlassian payload. Allow-list logging
+ * through Object Summary Policies remains the primary leak-prevention
+ * mechanism.
+ */
+export const DEFAULT_REDACT_PATHS: readonly string[] = [
+  ...SECRET_KEYS,
+  ...HEADER_CASINGS,
+].flatMap((key) => [key, `*.${key}`]);
 
 export const DEFAULT_REDACTION_CENSOR = "[redacted]";
 
@@ -60,12 +54,8 @@ export function withDefaultRedaction(
   };
 }
 
-function baseNameOf(path: string): string {
-  return path.slice(path.lastIndexOf(".") + 1).toLowerCase();
-}
-
-const DEFAULT_SECRET_SHAPED_KEYS: readonly string[] = Array.from(
-  new Set(DEFAULT_REDACT_PATHS.map(baseNameOf)),
+const DEFAULT_SECRET_SHAPED_KEYS: ReadonlySet<string> = new Set(
+  SECRET_KEYS.map((key) => key.toLowerCase()),
 );
 
 export function isSecretShapedKey(
@@ -74,7 +64,7 @@ export function isSecretShapedKey(
 ): boolean {
   const lowerKey = key.toLowerCase();
   return (
-    DEFAULT_SECRET_SHAPED_KEYS.includes(lowerKey) ||
+    DEFAULT_SECRET_SHAPED_KEYS.has(lowerKey) ||
     redactedKeys.some((redactedKey) => redactedKey.toLowerCase() === lowerKey)
   );
 }
