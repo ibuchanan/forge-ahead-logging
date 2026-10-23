@@ -308,7 +308,9 @@ can resolve a per-name override.
 ## Migrate value summary omission markers (breaking change)
 
 `summarizeForLog`, and every field that uses it, such as `identity` policy
-fields and `recordMetadata`, now marks omissions as `[omitted: ...]`. The
+fields and `recordMetadata`, now marks omissions as `[omitted: ...]`. A cycle
+found while redacting the log record itself, which used to be `"[Circular]"`,
+now reads `"[omitted: circular]"` too. The
 reasons and counts match the `omitted` field of
 [structural diagnostics](reference.md#structural-diagnostics). Update log
 queries and parsers that match the old marker text:

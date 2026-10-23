@@ -155,7 +155,11 @@ describe("createForgeLogger default redaction", () => {
         source: { nested: [{ token: "[redacted]", count: 2 }] },
         first: { password: "[redacted]", enabled: true },
         second: { password: "[redacted]", enabled: true },
-        circular: { token: "[redacted]", count: 3, self: "[Circular]" },
+        circular: {
+          token: "[redacted]",
+          count: 3,
+          self: "[omitted: circular]",
+        },
         computed: { nested: { secret: "[redacted]", status: 200 } },
         values: [null, null, null, true, 4],
       });

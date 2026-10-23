@@ -2,6 +2,7 @@ import fc from "fast-check";
 import { assert, describe, expect, it } from "vitest";
 import { type JSONValue, summarizeForLog } from "../src/index";
 import { summarizeShapeForLog } from "../src/summarize";
+import { createCapturingLogger } from "../src/testing";
 import {
   plant,
   plantedValue,
@@ -291,6 +292,16 @@ describe("omission markers", () => {
 
     expect(reason).toBe("circular");
     expect(summarizeForLog(input)).toEqual({ self: `[omitted: ${reason}]` });
+  });
+
+  it("name a cycle the same way in a log record and in a summary", () => {
+    const input: Record<string, unknown> = {};
+    input["self"] = input;
+    const { logger, records } = createCapturingLogger();
+
+    logger.info({ cyclic: input });
+
+    expect(records[0]?.["cyclic"]).toEqual(summarizeForLog(input));
   });
 
   it("count omitted items and keys with the structural count", () => {

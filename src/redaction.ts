@@ -139,7 +139,7 @@ function redactRecordValue(
 ): unknown {
   if (value === null || typeof value !== "object")
     return redactPrimitive(value, budget);
-  if (seen.has(value)) return "[Circular]";
+  if (seen.has(value)) return "[omitted: circular]";
   if (depth >= MAX_REDACTION_DEPTH) throw REDACTION_LIMIT;
   if (
     key !== undefined &&
