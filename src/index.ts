@@ -1,7 +1,7 @@
-import { AsyncLocalStorage } from "node:async_hooks";
 import type { ProblemDetails, Result } from "@forge-ahead/errors";
 import pino from "pino";
 import { writeLogLineToConsole } from "./console.js";
+import { getLogContext } from "./context.js";
 import {
   type LogErrorOptions,
   type LogResultOptions,
@@ -25,6 +25,7 @@ import { redactLogRecord, withDefaultRedaction } from "./redaction.js";
 import { summarizeForLog } from "./summarize.js";
 
 export { installConsoleCapture } from "./console.js";
+export { getLogContext, withLogContext } from "./context.js";
 export {
   type LogErrorOptions,
   type LogResultOptions,
@@ -72,21 +73,6 @@ export {
   type LogValueSummaryOptions,
   summarizeForLog,
 } from "./summarize.js";
-
-const ambientContext = new AsyncLocalStorage<Record<string, unknown>>();
-
-export function getLogContext(): Record<string, unknown> {
-  return ambientContext.getStore() ?? {};
-}
-
-export function withLogContext<T>(
-  bindings: Record<string, unknown>,
-  operation: () => T | Promise<T>,
-): T | Promise<T> {
-  const parent = ambientContext.getStore();
-  const merged = parent ? { ...parent, ...bindings } : bindings;
-  return ambientContext.run(merged, operation);
-}
 
 /** A record, a message string used as the format, or a lazy record. */
 type LogInput =
