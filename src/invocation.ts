@@ -128,73 +128,60 @@ export function withForgeInvocationLogging<TEvent, TResult>(
   }
 
   const start = Date.now();
-  const message = options?.message ?? "invocation completed";
+  const message = options.message ?? "invocation completed";
 
-  function logCompletion(
-    level: "debug" | "info" | "warn" | "error" | "fatal",
-    outcome: "success" | "failure",
-    value: TResult | unknown,
-    messageText?: string,
-  ): void {
-    const durationMs = Date.now() - start;
+  function logSuccess(value: TResult): void {
     const metadata: Record<string, unknown> = {
       ...baseMetadata,
-      outcome,
-      durationMs,
+      outcome: "success",
+      durationMs: Date.now() - start,
     };
-    if (
-      outcome === "success" &&
-      options?.summarizeResult &&
-      value !== undefined
-    ) {
-      Object.assign(metadata, options.summarizeResult(value as TResult));
+    if (options.summarizeResult && value !== undefined) {
+      Object.assign(metadata, options.summarizeResult(value));
     }
-    logger[level](metadata, messageText ?? message);
+    logger[options.successLevel ?? "info"](
+      metadata,
+      options.successMessage ?? message,
+    );
   }
 
-  function logFailure(error: unknown): never {
-    logResultError(error);
+  function logFailure(error: unknown): void {
+    const metadata = buildErrorMetadata(error, options);
+    Object.assign(metadata, baseMetadata, {
+      outcome: "failure",
+      durationMs: Date.now() - start,
+    });
+    logger[options.errorLevel ?? "error"](
+      metadata,
+      options.errorMessage ?? message,
+    );
+  }
+
+  function rethrowAfterLogging(error: unknown): never {
+    logFailure(error);
     throw error;
   }
 
-  function logResultError(err: unknown): void {
-    const durationMs = Date.now() - start;
-    const metadata = buildErrorMetadata(err, options);
-    Object.assign(metadata, baseMetadata, {
-      outcome: "failure",
-      durationMs,
-    });
-    const level = options?.errorLevel ?? "error";
-    logger[level](metadata, options?.errorMessage ?? message);
-  }
-
   function handleReturn(value: TResult): TResult {
-    let resultValue = value;
-    if (isResult(value)) {
-      if (value.isErr()) {
-        logResultError(value.error);
-        return value;
-      }
-      resultValue = value.value as TResult;
+    if (!isResult(value)) {
+      logSuccess(value);
+    } else if (value.isErr()) {
+      logFailure(value.error);
+    } else {
+      logSuccess(value.value as TResult);
     }
-    logCompletion(
-      options?.successLevel ?? "info",
-      "success",
-      resultValue,
-      options?.successMessage ?? message,
-    );
     return value;
   }
 
   try {
     const result = handler(event);
     if (isPromiseLike(result)) {
-      return result.then(handleReturn, logFailure) as
+      return result.then(handleReturn, rethrowAfterLogging) as
         | TResult
         | Promise<TResult>;
     }
     return handleReturn(result);
   } catch (error) {
-    return logFailure(error);
+    return rethrowAfterLogging(error);
   }
 }
