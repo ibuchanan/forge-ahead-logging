@@ -1,6 +1,6 @@
 import pino from "pino";
-import type { ForgeLogger } from "./index.js";
 import { summarizeShapeForLog } from "./summarize.js";
+import type { LogLevelMethods } from "./types.js";
 
 const CONSOLE_METHOD_BY_LEVEL_LABEL: Readonly<
   Record<string, "error" | "warn" | "info" | "debug">
@@ -68,7 +68,7 @@ const CAPTURED_CONSOLE_METHODS = [
   ["debug", "debug"],
 ] as const;
 
-export function installConsoleCapture(logger: ForgeLogger): () => void {
+export function installConsoleCapture(logger: LogLevelMethods): () => void {
   const previous = CAPTURED_CONSOLE_METHODS.map(
     ([method]) => [method, console[method]] as const,
   );

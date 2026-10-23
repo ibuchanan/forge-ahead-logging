@@ -1,6 +1,5 @@
 import type { Result } from "@forge-ahead/errors";
 import { buildErrorMetadata } from "./errors.js";
-import type { ForgeLogger } from "./index.js";
 import {
   defineLogObjectSummaryPolicy,
   type LogObjectSummaryPolicy,
@@ -11,6 +10,7 @@ import {
   type LogValueSummaryOptions,
   summarizeShapeForLog,
 } from "./summarize.js";
+import type { LogLevelMethods } from "./types.js";
 
 export const FORGE_EVENT_SUMMARY_POLICY = defineLogObjectSummaryPolicy({
   kind: "forgeEvent",
@@ -46,12 +46,12 @@ export interface ForgeInvocationLogOptions extends LogValueSummaryOptions {
   includeEventShape?: boolean;
 }
 
-function isVerboseLevelEnabled(logger: ForgeLogger): boolean {
+function isVerboseLevelEnabled(logger: LogLevelMethods): boolean {
   return logger.isLevelEnabled("debug");
 }
 
 function computeEventShape(
-  logger: ForgeLogger,
+  logger: LogLevelMethods,
   event: unknown,
   options: ForgeInvocationLogOptions | undefined,
   env: Record<string, string | undefined>,
@@ -72,7 +72,7 @@ function computeEventShape(
 }
 
 export function logForgeInvocation(
-  logger: ForgeLogger,
+  logger: LogLevelMethods,
   event: unknown,
   message?: string,
   options?: ForgeInvocationLogOptions,
@@ -108,7 +108,7 @@ function isResult(value: unknown): value is Result<unknown, unknown> {
 }
 
 export function withForgeInvocationLogging<TEvent, TResult>(
-  logger: ForgeLogger,
+  logger: LogLevelMethods,
   event: TEvent,
   handler: (event: TEvent) => TResult | Promise<TResult>,
   options: ForgeInvocationLoggingOptions<TResult> = {},

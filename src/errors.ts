@@ -1,8 +1,8 @@
 import type { ProblemDetails, Result } from "@forge-ahead/errors";
 import { isProblemDetails } from "@forge-ahead/errors";
-import type { ForgeLogger } from "./index.js";
 import type { LogObjectSummaryPolicy } from "./policy.js";
 import { summarizeObjectForLog } from "./policy.js";
+import type { LogLevelMethods } from "./types.js";
 
 function approvedProblemFields(
   problemDetails: ProblemDetails,
@@ -124,7 +124,7 @@ export interface LogResultOptions<T, E> {
 }
 
 export function logResult<T, E = ProblemDetails>(
-  logger: ForgeLogger,
+  logger: LogLevelMethods,
   result: Result<T, E>,
   options: LogResultOptions<T, E> = {},
 ): void {
@@ -153,7 +153,7 @@ export interface LogErrorOptions {
 }
 
 export function logError(
-  logger: ForgeLogger,
+  logger: LogLevelMethods,
   error: unknown,
   options?: LogErrorOptions,
 ): void {

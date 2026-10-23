@@ -23,6 +23,7 @@ import type { LogProbeOptions } from "./probe.js";
 import { logProbe } from "./probe.js";
 import { redactLogRecord, withDefaultRedaction } from "./redaction.js";
 import { summarizeForLog } from "./summarize.js";
+import type { LogInput, LogLevelMethods } from "./types.js";
 
 export { installConsoleCapture } from "./console.js";
 export { getLogContext, withLogContext } from "./context.js";
@@ -73,29 +74,7 @@ export {
   type LogValueSummaryOptions,
   summarizeForLog,
 } from "./summarize.js";
-
-/** A record, a message string used as the format, or a lazy record. */
-type LogInput =
-  | Record<string, unknown>
-  | string
-  | (() => Record<string, unknown>);
-
-export type LogMethod = (
-  obj: LogInput,
-  message?: string,
-  ...args: unknown[]
-) => void;
-
-/**
- * A small upstream logger contract for domain observability code that does not
- * want to depend on the full `ForgeLogger` interface.
- */
-export interface MinimalLogger {
-  readonly info: LogMethod;
-  readonly error: LogMethod;
-  readonly warn?: LogMethod;
-  readonly debug?: LogMethod;
-}
+export type { LogMethod, MinimalLogger } from "./types.js";
 
 export type ForgeTimestampFormat = "epoch" | "iso";
 
@@ -109,20 +88,13 @@ export interface ForgeLoggerOptions {
   timestamp?: ForgeTimestampFormat;
 }
 
-export interface ForgeLogger {
-  fatal: LogMethod;
-  error: LogMethod;
-  warn: LogMethod;
-  info: LogMethod;
-  debug: LogMethod;
-  trace: LogMethod;
+export interface ForgeLogger extends LogLevelMethods {
   log(
     level: Exclude<ForgeLogLevel, "silent">,
     obj: LogInput,
     message?: string,
     ...args: unknown[]
   ): void;
-  isLevelEnabled(level: ForgeLogLevel): boolean;
   child(bindings: Record<string, unknown>): ForgeLogger;
   forgeInvocation(
     event: unknown,

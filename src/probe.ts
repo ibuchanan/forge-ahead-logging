@@ -1,11 +1,11 @@
 import { buildErrorMetadata } from "./errors.js";
-import type { ForgeLogger } from "./index.js";
 import {
   type LogObjectSummaryPolicy,
   summarizeObjectForLog,
 } from "./policy.js";
 import { isPromiseLike } from "./promise.js";
 import { type JSONValue, summarizeShapeForLog } from "./summarize.js";
+import type { LogLevelMethods } from "./types.js";
 
 export type DebugProbeLevel = "debug" | "trace";
 
@@ -42,7 +42,7 @@ function resolveProbeMetadata(
  * while building or writing the record is swallowed.
  */
 function emitProbe(
-  logger: ForgeLogger,
+  logger: LogLevelMethods,
   level: DebugProbeLevel,
   label: string,
   options: LogProbeOptions | undefined,
@@ -64,7 +64,7 @@ function emitProbe(
 }
 
 function logProbeSuccess(
-  logger: ForgeLogger,
+  logger: LogLevelMethods,
   label: string,
   value: unknown,
   level: DebugProbeLevel,
@@ -78,7 +78,7 @@ function logProbeSuccess(
 }
 
 function logProbeError(
-  logger: ForgeLogger,
+  logger: LogLevelMethods,
   label: string,
   error: unknown,
   level: DebugProbeLevel,
@@ -90,7 +90,7 @@ function logProbeError(
 }
 
 export function logProbe<T>(
-  logger: ForgeLogger,
+  logger: LogLevelMethods,
   label: string,
   valueOrThunk: T | (() => T),
   options?: LogProbeOptions,
