@@ -1,6 +1,5 @@
 import type { ProblemDetails } from "@forge-ahead/errors";
 import { isProblemDetails } from "@forge-ahead/errors";
-import type { ForgeLogger } from "./index.js";
 import type { LogObjectSummaryPolicy } from "./policy.js";
 import { summarizeObjectForLog } from "./policy.js";
 
@@ -54,16 +53,25 @@ function buildDomainErrorMetadata(
   return { errorCode: error.code, outcome: "failure" };
 }
 
+/** Per-call-site error summarizing choices shared by every error-logging option type. */
+export interface ErrorSummaryOptions {
+  /** Status to report for errors that do not carry their own. */
+  status?: number;
+  /** Reviewed projection replacing the structural error summary. */
+  errorPolicy?: LogObjectSummaryPolicy;
+}
+
 export function buildErrorMetadata(
-  _logger: ForgeLogger,
   error: unknown,
-  status?: number,
-  errorPolicy?: LogObjectSummaryPolicy,
+  options?: ErrorSummaryOptions,
 ): Record<string, unknown> {
-  if (errorPolicy) {
-    return { ...summarizeObjectForLog(error, errorPolicy), outcome: "failure" };
+  if (options?.errorPolicy) {
+    return {
+      ...summarizeObjectForLog(error, options.errorPolicy),
+      outcome: "failure",
+    };
   }
-  const metadata = buildErrorMetadataSummary(error, status);
+  const metadata = buildErrorMetadataSummary(error, options?.status);
 
   if (
     typeof error === "object" &&

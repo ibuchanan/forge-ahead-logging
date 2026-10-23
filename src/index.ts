@@ -304,12 +304,7 @@ export function withForgeInvocationLogging<TEvent, TResult>(
 
   function logFailure(error: unknown): never {
     const durationMs = Date.now() - start;
-    const metadata = buildErrorMetadata(
-      logger,
-      error,
-      undefined,
-      options?.errorPolicy,
-    );
+    const metadata = buildErrorMetadata(error, options);
     Object.assign(metadata, baseMetadata, { outcome: "failure", durationMs });
     const level = options?.errorLevel ?? "error";
     logger[level](metadata, options?.errorMessage ?? message);
@@ -320,12 +315,7 @@ export function withForgeInvocationLogging<TEvent, TResult>(
     if (isResult(value)) {
       if (value.isErr()) {
         const durationMs = Date.now() - start;
-        const metadata = buildErrorMetadata(
-          logger,
-          value.error,
-          undefined,
-          options?.errorPolicy,
-        );
+        const metadata = buildErrorMetadata(value.error, options);
         Object.assign(metadata, baseMetadata, {
           outcome: "failure",
           durationMs,
@@ -393,12 +383,7 @@ export function logResult<T, E = ProblemDetails>(
     return;
   }
   const level = options?.errorLevel ?? "error";
-  const metadata = buildErrorMetadata(
-    logger,
-    result.error,
-    undefined,
-    options?.errorPolicy,
-  );
+  const metadata = buildErrorMetadata(result.error, options);
   if (options?.summarizeErr) {
     Object.assign(metadata, options.summarizeErr(result.error));
   }
@@ -418,12 +403,7 @@ export function logError(
   options?: LogErrorOptions,
 ): void {
   const level = options?.level ?? "error";
-  const metadata = buildErrorMetadata(
-    logger,
-    error,
-    options?.status,
-    options?.errorPolicy,
-  );
+  const metadata = buildErrorMetadata(error, options);
   logger[level](metadata, options?.message);
 }
 
@@ -511,7 +491,7 @@ function logProbeError(
   try {
     const debugProbe: Record<string, unknown> = {
       label,
-      error: buildErrorMetadata(logger, error, undefined, options?.errorPolicy),
+      error: buildErrorMetadata(error, options),
     };
     const metadata = resolveProbeMetadata(options);
     if (metadata !== undefined) {
