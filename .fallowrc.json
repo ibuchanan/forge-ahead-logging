@@ -5,5 +5,6 @@
     "src/testing.ts",
     "test/**/*.test.ts"
   ],
-  "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json"
+  "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
+  "ignoreDependencies": ["@arethetypeswrong/cli", "publint"]
 }

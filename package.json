@@ -2,7 +2,9 @@
   "name": "@forge-ahead/logging",
   "version": "0.4.1",
   "private": true,
+  "description": "Structured, bounded, and redacted logging helpers for Forge apps.",
   "license": "Apache-2.0",
+  "author": "ibuchanan",
   "type": "module",
   "exports": {
     ".": {
@@ -46,47 +48,51 @@
   "scripts": {
     "build": "sh scripts/build.sh",
     "changelog": "git cliff --config cliff.toml --unreleased -o CHANGELOG.md",
-    "check": "lefthook run pre-push --force",
+    "check": "run-p --print-label lint test pack:check",
     "clean": "rm -rf ./node_modules && rm package-lock.json && rm -rf ./dist",
     "dev": "tsdown --watch",
     "format": "biome format --write",
     "format:check": "biome format",
-    "lint": "npm exec --yes --package=npm-run-all2@9.0.3 -- npm-run-all --parallel --print-label \"lint:check:*\"",
+    "lint": "run-p --print-label \"lint:check:*\"",
     "lint:check": "biome lint",
+    "lint:check:biome": "npm run lint:check",
+    "lint:check:fallow": "npm run lint:fallow",
+    "lint:check:format": "npm run format:check",
+    "lint:check:typecheck": "npm run typecheck",
+    "lint:docs": "markdownlint-cli2 \"**/*.md\" && cspell lint \"**/*.md\"",
+    "lint:fallow": "fallow --fail-on-issues",
     "lint:fix": "biome lint --write",
+    "pack:check": "npm run build && sh scripts/pack-check.sh",
     "prepare": "npm run build && (lefthook install || true)",
+    "release": "bash scripts/release.sh",
+    "release:check": "npm test && npm run typecheck && npm run pack:check",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest watch",
-    "typecheck": "tsc --project tsconfig.typecheck.json --noEmit",
-    "release:check": "npm test && npm run typecheck && npm run pack:check",
     "todo": "git grep -n -I -F TO\"DO\" -- .; status=$?; if [ \"$status\" -eq 1 ]; then echo \"No TO\"\"DO markers found.\"; elif [ \"$status\" -ne 0 ]; then exit \"$status\"; fi",
-    "release": "bash scripts/release.sh",
-    "lint:check:biome": "npm run lint:check",
-    "lint:check:format": "npm run format:check",
-    "pack:check": "npm run build && sh scripts/pack-check.sh",
-    "lint:check:typecheck": "npm run typecheck",
-    "lint:fallow": "npm exec --yes --package=fallow@3.34.1 -- fallow --fail-on-issues",
-    "lint:check:fallow": "npm run lint:fallow",
-    "lint:docs": "npm exec --yes --package=markdownlint-cli2@0.24.0 -- markdownlint-cli2 \"**/*.md\" && npm exec --yes --package=cspell@10.4.0 -- cspell lint \"**/*.md\""
+    "typecheck": "tsc --project tsconfig.typecheck.json --noEmit"
   },
   "dependencies": {
     "@forge-ahead/errors": "github:ibuchanan/forge-ahead-errors",
     "pino": "^10.4.0"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "0.18.5",
     "@biomejs/biome": "2.6.2",
     "@types/node": "22",
     "@vitest/coverage-v8": "^5.0",
+    "cspell": "10.4.0",
+    "fallow": "3.34.1",
     "fast-check": "^4.10",
     "lefthook": "^2.2",
+    "markdownlint-cli2": "0.24.0",
+    "npm-run-all2": "9.0.3",
+    "publint": "0.3.25",
     "tsdown": "^0.23",
     "typescript": "^5.9",
     "vitest": "^5.0"
   },
   "engines": {
     "node": ">=22"
-  },
-  "description": "Structured, bounded, and redacted logging helpers for Forge apps.",
-  "author": "ibuchanan"
+  }
 }
