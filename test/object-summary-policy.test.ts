@@ -1,9 +1,11 @@
+import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import {
   defineLogObjectSummaryPolicy,
   summarizeObjectForLog,
 } from "../src/index";
 import { createCapturingLogger } from "../src/testing";
+import { secretKey } from "./privacy-arbitraries";
 
 describe("defineLogObjectSummaryPolicy", () => {
   it("returns the policy unchanged", () => {
@@ -107,42 +109,74 @@ describe("policy definition diagnostics", () => {
 });
 
 describe("policy source-path validation", () => {
-  it.each([
-    ["fields", "headers.Authorization"],
-    ["labels", ["headers", "aUtHoRiZaTiOn"]],
-    ["fields", "credentials.accessToken"],
-    ["labels", ["credentials", "contextToken"]],
-    ["fields", "token.value"],
-    ["fields", ["nested", "api_key"]],
-    ["fields", "cookie"],
-    ["labels", ["headers", "Set-Cookie"]],
-    ["fields", "client_secret"],
-    ["fields", "password"],
-    ["fields", "jwt"],
-  ] as const)(
-    "rejects aliased identity and preview of %s source %j",
-    (map, path) => {
-      for (const selection of [
-        path,
-        { path },
-        { path, transform: "identity" },
-        { path, transform: "tokenPreview" },
-      ] as const) {
-        const policy = {
-          kind: "request",
-          fields: {},
-          [map]: { publicValue: selection },
-        };
-
-        expect(() => defineLogObjectSummaryPolicy(policy)).toThrow(
-          `${map}.publicValue selects secret-shaped source path`,
-        );
-        expect(() => defineLogObjectSummaryPolicy(policy)).toThrow(
-          "use redact or omittedShape, or remove the selection",
-        );
-      }
-    },
-  );
+  it("rejects unsafe secret selections regardless of casing, nesting, aliases, or map", () => {
+    fc.assert(
+      fc.property(
+        fc.record({
+          key: secretKey,
+          prefix: fc.array(fc.constantFrom("nested", "headers", "0"), {
+            maxLength: 8,
+          }),
+          suffix: fc.array(fc.constantFrom("value", "0"), { maxLength: 8 }),
+          alias: fc.string({ minLength: 1, maxLength: 24 }),
+          map: fc.constantFrom("fields", "labels"),
+          asArray: fc.boolean(),
+        }),
+        ({ key, prefix, suffix, alias, map, asArray }) => {
+          const segments = [...prefix, key, ...suffix];
+          const path = asArray ? segments : segments.join(".");
+          for (const selection of [
+            path,
+            { path },
+            { path, transform: "identity" },
+            { path, transform: "tokenPreview" },
+          ] as const) {
+            expect(() =>
+              defineLogObjectSummaryPolicy({
+                kind: "request",
+                fields: {},
+                [map]: { [alias]: selection },
+              }),
+            ).toThrow(
+              `${map}.${alias} selects secret-shaped source path ${JSON.stringify(path)}; use redact or omittedShape, or remove the selection`,
+            );
+          }
+          for (const transform of ["redact", "omittedShape"] as const) {
+            const policy = {
+              kind: "request",
+              fields: {},
+              [map]: { [alias]: { path, transform } },
+            };
+            expect(defineLogObjectSummaryPolicy(policy)).toBe(policy);
+          }
+        },
+      ),
+      {
+        examples: [
+          [
+            {
+              key: "Authorization",
+              prefix: [],
+              suffix: ["value"],
+              alias: "publicValue",
+              map: "fields",
+              asArray: false,
+            },
+          ],
+          [
+            {
+              key: "api_key",
+              prefix: ["headers"],
+              suffix: [],
+              alias: "publicValue",
+              map: "labels",
+              asArray: true,
+            },
+          ],
+        ],
+      },
+    );
+  });
 });
 
 describe("reviewed policy emission", () => {
@@ -269,20 +303,34 @@ describe("summarizeObjectForLog", () => {
     },
   });
 
-  it("includes policy fields by default, plus kind", () => {
-    const deployment = {
-      deploymentSequenceNumber: 42,
-      updateSequenceNumber: 7,
-      displayName: "prod",
-    };
+  it("does not widen the allow-list when arbitrary fields or labels are added", () => {
+    fc.assert(
+      fc.property(
+        fc.integer(),
+        fc.integer(),
+        fc.jsonValue({ maxDepth: 2 }),
+        fc.dictionary(fc.string(), fc.jsonValue({ maxDepth: 2 })),
+        (
+          deploymentSequenceNumber,
+          updateSequenceNumber,
+          displayName,
+          extra,
+        ) => {
+          const selected = { deploymentSequenceNumber, updateSequenceNumber };
+          const expected = { kind: "deployment", ...selected };
 
-    const result = summarizeObjectForLog(deployment, deploymentPolicy);
-
-    expect(result).toEqual({
-      kind: "deployment",
-      deploymentSequenceNumber: 42,
-      updateSequenceNumber: 7,
-    });
+          expect(summarizeObjectForLog(selected, deploymentPolicy)).toEqual(
+            expected,
+          );
+          expect(
+            summarizeObjectForLog(
+              { ...extra, ...selected, displayName },
+              deploymentPolicy,
+            ),
+          ).toEqual(expected);
+        },
+      ),
+    );
   });
 
   it("omits fields missing from the value instead of emitting undefined", () => {

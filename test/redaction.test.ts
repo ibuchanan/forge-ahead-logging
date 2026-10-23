@@ -1,3 +1,4 @@
+import fc from "fast-check";
 import { describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_REDACT_PATHS,
@@ -9,78 +10,44 @@ import {
   withDefaultRedaction,
 } from "../src/index";
 import { createCapturingLogger } from "../src/testing";
+import { secretKey, secretKeys } from "./privacy-arbitraries";
 
 describe("createForgeLogger default redaction", () => {
-  it("redacts secret-shaped keys through deep objects and arrays without losing operational fields", () => {
-    const { logger, records } = createCapturingLogger({ env: {} });
-    const input = Object.freeze({
-      batches: Object.freeze([
-        Object.freeze({
-          results: Object.freeze([
-            Object.freeze({
-              headers: Object.freeze({
-                AUTHORIZATION: "synthetic-auth-secret",
-                cookie: "synthetic-cookie-secret",
-                "Set-Cookie": "synthetic-set-cookie-secret",
-                "content-type": "application/json",
-              }),
-              credentials: Object.freeze({
-                token: "synthetic-token-secret",
-                accessToken: "synthetic-access-secret",
-                refreshToken: "synthetic-refresh-secret",
-                contextToken: "synthetic-context-secret",
-                jwt: "synthetic-jwt-secret",
-                password: "synthetic-password-secret",
-                apiKey: "synthetic-key-secret",
-                api_key: "synthetic-api-key-secret",
-                secret: "synthetic-secret-secret",
-                clientSecret: "synthetic-client-secret",
-                client_secret: "synthetic-client-secret-underscore",
-              }),
-              status: 202,
-            }),
-          ]),
-        }),
-      ]),
-    });
+  it("redacts mixed-case secret keys at generated object/array depths without losing siblings or mutating inputs", () => {
+    fc.assert(
+      fc.property(
+        secretKey,
+        fc.jsonValue({ maxDepth: 2 }),
+        fc.array(fc.boolean(), { maxLength: 24 }),
+        fc.integer(),
+        (key, secret, arrays, status) => {
+          const leaf = Object.freeze({ [key]: secret, status });
+          let input: unknown = leaf;
+          let expected: unknown = { [key]: "[redacted]", status };
+          for (const array of arrays) {
+            input = Object.freeze(array ? [input] : { next: input });
+            expected = array ? [expected] : { next: expected };
+          }
+          const before = JSON.stringify(input);
+          const { logger, records } = createCapturingLogger({ env: {} });
 
-    logger.info(input, "batch");
-    logger.info(input, "batch again");
+          logger.info({ data: input }, "batch");
+          logger.info({ data: input }, "batch again");
 
-    expect(records).toHaveLength(2);
-    for (const record of records) {
-      expect(record.batches).toEqual([
-        {
-          results: [
-            {
-              headers: {
-                AUTHORIZATION: "[redacted]",
-                cookie: "[redacted]",
-                "Set-Cookie": "[redacted]",
-                "content-type": "application/json",
-              },
-              credentials: {
-                token: "[redacted]",
-                accessToken: "[redacted]",
-                refreshToken: "[redacted]",
-                contextToken: "[redacted]",
-                jwt: "[redacted]",
-                password: "[redacted]",
-                apiKey: "[redacted]",
-                api_key: "[redacted]",
-                secret: "[redacted]",
-                clientSecret: "[redacted]",
-                client_secret: "[redacted]",
-              },
-              status: 202,
-            },
-          ],
+          expect(records).toHaveLength(2);
+          for (const record of records) expect(record.data).toEqual(expected);
+          expect(JSON.stringify(input)).toBe(before);
+          expect(leaf[key]).toBe(secret);
         },
-      ]);
-    }
-    expect(JSON.stringify(records)).not.toContain("synthetic-");
-    expect(input.batches[0].results[0].credentials.token).toBe(
-      "synthetic-token-secret",
+      ),
+      {
+        examples: secretKeys.map((key): [string, string, boolean[], number] => [
+          key,
+          "synthetic-secret",
+          [true, false, true, false],
+          202,
+        ]),
+      },
     );
   });
 
