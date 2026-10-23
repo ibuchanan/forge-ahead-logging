@@ -9,6 +9,7 @@ import {
   withForgeInvocationLogging,
 } from "../src/index";
 import { createCapturingLogger } from "../src/testing";
+import { expectNoneEscaped } from "./privacy-helpers";
 
 const event = {
   eventType: "avi:jira:created:issue",
@@ -39,25 +40,25 @@ const expectedSummary = {
 };
 
 function expectMinimized(value: unknown): void {
-  const serialized = JSON.stringify(value);
-  for (const forbidden of [
-    "SYNTHETIC",
-    "END",
-    "authorization-token",
-    "contextToken",
-    "synthetic-person",
-    "synthetic-site",
-    "private-issue",
-    "customer-query",
-    "customer-cloud-id",
-    "customer-account-id",
-    "customer-site-id",
-    "customer-tenant-id",
-    "synthetic-header-token",
-    "private customer",
-  ]) {
-    expect(serialized).not.toContain(forbidden);
-  }
+  expectNoneEscaped(
+    [value],
+    [
+      "SYNTHETIC",
+      "END",
+      "authorization-token",
+      "contextToken",
+      "synthetic-person",
+      "synthetic-site",
+      "private-issue",
+      "customer-query",
+      "customer-cloud-id",
+      "customer-account-id",
+      "customer-site-id",
+      "customer-tenant-id",
+      "synthetic-header-token",
+      "private customer",
+    ],
+  );
 }
 
 describe.each(["info", "debug", "trace"] as const)(

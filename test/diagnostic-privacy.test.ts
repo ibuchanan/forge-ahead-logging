@@ -10,19 +10,17 @@ import {
   withForgeInvocationLogging,
 } from "../src/index";
 import { createCapturingLogger } from "../src/testing";
+import { expectNoneEscaped } from "./privacy-helpers";
 
 const privateText =
   "synthetic-person@example.test Bearer synthetic-token customer comment";
 
 function expectPrivateDataAbsent(value: unknown): void {
-  const serialized = JSON.stringify(value);
-  for (const forbidden of [
+  expectNoneEscaped(Array.isArray(value) ? value : [value], [
     "synthetic-person",
     "synthetic-token",
     "customer comment",
-  ]) {
-    expect(serialized).not.toContain(forbidden);
-  }
+  ]);
 }
 
 afterEach(() => vi.unstubAllEnvs());

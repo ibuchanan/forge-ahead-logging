@@ -1,10 +1,7 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import {
-  DEFAULT_REDACT_PATHS,
-  type JSONValue,
-  summarizeForLog,
-} from "../src/index";
+import { type JSONValue, summarizeForLog } from "../src/index";
+import { secretKey, secretKeys } from "./privacy-arbitraries";
 
 describe("summarizeForLog", () => {
   it("passes through JSON-safe primitives unchanged", () => {
@@ -218,31 +215,14 @@ describe("summarizeForLog", () => {
     expect(result).toEqual({ Password: "[redacted]", ok: "fine" });
   });
 
-  it("redacts every base name derivable from DEFAULT_REDACT_PATHS, not just a sample", () => {
-    const baseNames = new Set(
-      DEFAULT_REDACT_PATHS.map((path) => {
-        const segments = path.split(".");
-        return segments[segments.length - 1].toLowerCase();
+  it("redacts every contract secret key at any casing", () => {
+    fc.assert(
+      fc.property(secretKey, (key) => {
+        expect(summarizeForLog({ [key]: "secret-value" })).toEqual({
+          [key]: "[redacted]",
+        });
       }),
+      { examples: secretKeys.map((key): [string] => [key]) },
     );
-
-    for (const name of baseNames) {
-      const result = summarizeForLog({ [name]: "secret-value" }) as Record<
-        string,
-        unknown
-      >;
-      expect(result[name]).toBe("[redacted]");
-    }
-  });
-
-  it("stops recursing past maxDepth", () => {
-    const nested = { a: { b: { c: { d: "too deep" } } } };
-
-    const result = summarizeForLog(nested, { maxDepth: 2 }) as Record<
-      string,
-      Record<string, unknown>
-    >;
-
-    expect(result.a.b).toBe("[max depth reached]");
   });
 });

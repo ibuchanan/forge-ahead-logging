@@ -3,11 +3,12 @@ import { describe, expect, it } from "vitest";
 import {
   defineLogObjectSummaryPolicy,
   logError,
+  logProbe,
   logResult,
   withForgeInvocationLogging,
-  logProbe,
 } from "../src/index";
 import { createCapturingLogger } from "../src/testing";
+import { expectNoneEscaped } from "./privacy-helpers";
 
 const privateText =
   "synthetic-person@example.test Bearer synthetic-secret private customer comment";
@@ -178,15 +179,13 @@ describe.each(["info", "debug", "trace"] as const)(
             },
           ]);
         }
-        for (const forbidden of [
+        expectNoneEscaped(records, [
           "synthetic-person",
           "synthetic-secret",
           "private customer",
           "customer.example.test",
           "unknownProperty",
-        ]) {
-          expect(JSON.stringify(records)).not.toContain(forbidden);
-        }
+        ]);
       },
     );
   },

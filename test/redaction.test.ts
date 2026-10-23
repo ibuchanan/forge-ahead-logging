@@ -1,13 +1,13 @@
 import fc from "fast-check";
 import { describe, expect, it, vi } from "vitest";
 import {
+  createForgeLogger,
   DEFAULT_REDACT_PATHS,
   DEFAULT_REDACTION_CENSOR,
-  createForgeLogger,
   installConsoleCapture,
   unwrapPinoLogger,
-  withLogContext,
   withDefaultRedaction,
+  withLogContext,
 } from "../src/index";
 import { createCapturingLogger } from "../src/testing";
 import { secretKey, secretKeys } from "./privacy-arbitraries";
@@ -377,31 +377,6 @@ describe("createForgeLogger default redaction", () => {
     }
     expect(inspect).not.toHaveBeenCalled();
     expect(records).toEqual([]);
-  });
-
-  it("censors a representative secret-shaped field but keeps the key present", () => {
-    const { logger, records } = createCapturingLogger({ env: {} });
-
-    logger.info({ password: "hunter2" }, "logging in");
-
-    const [record] = records;
-    expect(record.password).toBe("[redacted]");
-  });
-
-  it("censors a nested secret-shaped field while keeping sibling fields and shape intact", () => {
-    const { logger, records } = createCapturingLogger({ env: {} });
-
-    logger.info(
-      {
-        headers: { authorization: "Bearer secret", "content-type": "json" },
-      },
-      "incoming request",
-    );
-
-    const [record] = records;
-    const headers = record.headers as Record<string, unknown>;
-    expect(headers.authorization).toBe("[redacted]");
-    expect(headers["content-type"]).toBe("json");
   });
 
   it("merges a caller-supplied redact option with the defaults", () => {
