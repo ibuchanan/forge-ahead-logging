@@ -172,8 +172,14 @@ export function withLogContext<T>(
   return ambientContext.run(merged, operation);
 }
 
+/** A record, a message string used as the format, or a lazy record. */
+type LogInput =
+  | Record<string, unknown>
+  | string
+  | (() => Record<string, unknown>);
+
 export type LogMethod = (
-  obj: Record<string, unknown> | string | (() => Record<string, unknown>),
+  obj: LogInput,
   message?: string,
   ...args: unknown[]
 ) => void;
@@ -210,7 +216,7 @@ export interface ForgeLogger {
   trace: LogMethod;
   log(
     level: Exclude<ForgeLogLevel, "silent">,
-    obj: Record<string, unknown> | string | (() => Record<string, unknown>),
+    obj: LogInput,
     message?: string,
     ...args: unknown[]
   ): void;
@@ -260,47 +266,27 @@ function buildRecordMetadata(
   }
 }
 
-function resolveLogCall(
-  obj: Record<string, unknown> | string | (() => Record<string, unknown>),
-  level: ForgeLogLevel,
-  pinoLogger: pino.Logger,
-): { obj: Record<string, unknown>; message: string | undefined } {
-  let resolved: Record<string, unknown> | string;
-  if (typeof obj === "function") {
-    resolved = obj();
-  } else {
-    resolved = obj;
-  }
-
-  const ambient = getLogContext();
-  const base = pinoLogger.bindings();
-  const recordMetadata = buildRecordMetadata(pinoLogger, level);
-  return {
-    obj: redactLogRecord(
-      base,
-      recordMetadata,
-      ambient,
-      typeof resolved === "string" ? {} : resolved,
-    ),
-    message: typeof resolved === "string" ? resolved : undefined,
-  };
-}
-
 function logWithLevel(
   pinoLogger: pino.Logger,
   level: ForgeLogLevel,
-  obj: Record<string, unknown> | string | (() => Record<string, unknown>),
+  input: LogInput,
   message: string | undefined,
   args: unknown[],
 ): void {
   if (!pinoLogger.isLevelEnabled(level)) return;
-  const resolved = resolveLogCall(obj, level, pinoLogger);
-  const record = resolved.obj;
-  if (typeof obj === "string") {
-    pinoLogger[level](record, obj, message, ...args);
-    return;
-  }
-  pinoLogger[level](record, message ?? resolved.message, ...args);
+  const value = typeof input === "function" ? input() : input;
+  // A leading string is the format, so an explicit message becomes its first argument.
+  const { fields, format, formatArgs } =
+    typeof value === "string"
+      ? { fields: {}, format: value, formatArgs: [message, ...args] }
+      : { fields: value, format: message, formatArgs: args };
+  const record = redactLogRecord(
+    pinoLogger.bindings(),
+    buildRecordMetadata(pinoLogger, level),
+    getLogContext(),
+    fields,
+  );
+  pinoLogger[level](record, format, ...formatArgs);
 }
 
 function wrapPinoLogger(pinoLogger: pino.Logger): ForgeLogger {
