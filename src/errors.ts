@@ -1,5 +1,6 @@
-import type { ProblemDetails } from "@forge-ahead/errors";
+import type { ProblemDetails, Result } from "@forge-ahead/errors";
 import { isProblemDetails } from "@forge-ahead/errors";
+import type { ForgeLogger } from "./index.js";
 import type { LogObjectSummaryPolicy } from "./policy.js";
 import { summarizeObjectForLog } from "./policy.js";
 
@@ -105,4 +106,54 @@ export function buildErrorMetadata(
   }
 
   return metadata;
+}
+
+export interface LogResultOptions<T, E> {
+  message?: string;
+  successMessage?: string;
+  errorMessage?: string;
+  successLevel?: "debug" | "info";
+  errorLevel?: "warn" | "error";
+  summarizeOk?: (value: T) => Record<string, unknown>;
+  summarizeErr?: (error: E) => Record<string, unknown>;
+  errorPolicy?: LogObjectSummaryPolicy;
+}
+
+export function logResult<T, E = ProblemDetails>(
+  logger: ForgeLogger,
+  result: Result<T, E>,
+  options?: LogResultOptions<T, E>,
+): void {
+  if (result.isOk()) {
+    const level = options?.successLevel ?? "debug";
+    const metadata: Record<string, unknown> = { ok: true };
+    if (options?.summarizeOk) {
+      Object.assign(metadata, options.summarizeOk(result.value));
+    }
+    logger[level](metadata, options?.successMessage ?? options?.message);
+    return;
+  }
+  const level = options?.errorLevel ?? "error";
+  const metadata = buildErrorMetadata(result.error, options);
+  if (options?.summarizeErr) {
+    Object.assign(metadata, options.summarizeErr(result.error));
+  }
+  logger[level](metadata, options?.errorMessage ?? options?.message);
+}
+
+export interface LogErrorOptions {
+  message?: string;
+  level?: "warn" | "error" | "fatal";
+  status?: number;
+  errorPolicy?: LogObjectSummaryPolicy;
+}
+
+export function logError(
+  logger: ForgeLogger,
+  error: unknown,
+  options?: LogErrorOptions,
+): void {
+  const level = options?.level ?? "error";
+  const metadata = buildErrorMetadata(error, options);
+  logger[level](metadata, options?.message);
 }
