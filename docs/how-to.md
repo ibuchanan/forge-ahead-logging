@@ -119,7 +119,56 @@ try {
 }
 ```
 
-`logResult` and `logError` normalize their inputs into bounded metadata. Preserve the original error behavior after logging unless the surrounding API explicitly requires translation.
+`logResult` and `logError` project their inputs into minimal failure metadata without changing the error model. Preserve the original error behavior after logging unless the surrounding API explicitly requires translation.
+
+## Select additional error fields with a policy
+
+Use the existing Object Summary Policy API to select reviewed diagnostic fields:
+
+```ts
+import { defineLogObjectSummaryPolicy, logError } from "@forge-ahead/logging";
+
+const diagnosticPolicy = defineLogObjectSummaryPolicy({
+  kind: "syncDiagnostic",
+  fields: {
+    errorCode: "code",
+    retryable: "retryable",
+    attempts: "attempts",
+    causeCode: "cause.code",
+  },
+});
+
+try {
+  await runSync();
+} catch (error) {
+  logError(logger, error, {
+    message: "sync failed",
+    errorPolicy: diagnosticPolicy,
+  });
+  throw error;
+}
+```
+
+Pass the same `errorPolicy` option to `logResult` / `logger.result`, `logError` / `logger.errorResult`, invocation wrappers, or probes. It replaces the entire automatic error projection, including automatic causes and aggregate members. Missing fields are omitted; `outcome: "failure"` remains. Include `code` or nested paths explicitly when needed; a policy selecting only `retryable` will not retain `errorCode`.
+
+Review every selected value for necessity, access, and retention. Keep codes and types app-controlled; do not populate them with user input or identifying URLs. Do not restore raw messages, stacks, authorization data, or customer content merely because a policy makes that possible.
+
+## Migrate from previous error logging (breaking change)
+
+1. Update dashboards and assertions: domain failures now contain `errorCode` and `outcome`, not a message-derived `title` or arbitrary error properties. For example, `{ code: "CONFLICT", message: "customer text", retryable: true }` now logs `{ errorCode: "CONFLICT", outcome: "failure" }`.
+2. Stop expecting Problem Details `title`, `detail`, `timestamp`, or `instance`. Only `type`, `status`, and `outcome` remain. The input error object and the downstream errors package are unchanged.
+3. Stop expecting synthetic HTTP `500`/type values for plain exceptions or unknown thrown values. Use `errorName` and `outcome` for exceptions, or only `outcome` for unknown values. If an actual HTTP status is known, supply `logError`'s `status` option; it does not invent a status for a domain failure or override an existing Problem Details status. A replacement policy controls status inclusion itself.
+4. Remove reliance on automatic stacks, even at debug/trace. Cause chains (at most three links) and aggregate members (at most three) retain shallow minimal projections, not messages or stacks. Use reviewed operational fields such as `causeCode` in the policy above instead of copying whole causes.
+5. Audit existing `summarizeErr` callbacks. They still run after the selected projection and merge their return fields; they are not a replacement mechanism. Switch to `errorPolicy` to control inclusion. If a callback is still needed, return only reviewed metadata:
+
+   ```ts
+   logResult(logger, result, {
+     errorPolicy: diagnosticPolicy,
+     summarizeErr: () => ({ operation: "sync" }),
+   });
+   ```
+
+6. Audit caller-supplied messages, labels, probe metadata, success summaries, logger bindings, and ambient context separately. These remain explicit application inputs and can reintroduce excluded data; raising the log threshold is not a privacy control.
 
 ## Summarize a rich object before logging it
 

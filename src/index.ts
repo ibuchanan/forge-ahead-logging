@@ -1,5 +1,5 @@
 import type { ProblemDetails, Result } from "@forge-ahead/errors";
-import { isProblemDetails, toProblemDetails } from "@forge-ahead/errors";
+import { isProblemDetails } from "@forge-ahead/errors";
 import { AsyncLocalStorage } from "node:async_hooks";
 import pino from "pino";
 
@@ -567,6 +567,7 @@ export interface ForgeInvocationLoggingOptions<T> {
   successMessage?: string;
   errorMessage?: string;
   summarizeResult?: (result: T) => Record<string, unknown>;
+  errorPolicy?: LogObjectSummaryPolicy;
 }
 
 function isResult(value: unknown): value is Result<unknown, unknown> {
@@ -625,7 +626,12 @@ export function withForgeInvocationLogging<TEvent, TResult>(
 
   function logFailure(error: unknown): never {
     const durationMs = Date.now() - start;
-    const metadata = buildErrorMetadata(logger, error);
+    const metadata = buildErrorMetadata(
+      logger,
+      error,
+      undefined,
+      options?.errorPolicy,
+    );
     Object.assign(metadata, baseMetadata, { outcome: "failure", durationMs });
     const level = options?.errorLevel ?? "error";
     logger[level](metadata, options?.errorMessage ?? message);
@@ -636,7 +642,12 @@ export function withForgeInvocationLogging<TEvent, TResult>(
     if (isResult(value)) {
       if (value.isErr()) {
         const durationMs = Date.now() - start;
-        const metadata = buildErrorMetadata(logger, value.error);
+        const metadata = buildErrorMetadata(
+          logger,
+          value.error,
+          undefined,
+          options?.errorPolicy,
+        );
         Object.assign(metadata, baseMetadata, {
           outcome: "failure",
           durationMs,
@@ -686,52 +697,38 @@ export interface LogResultOptions<T, E> {
   errorLevel?: "warn" | "error";
   summarizeOk?: (value: T) => Record<string, unknown>;
   summarizeErr?: (error: E) => Record<string, unknown>;
+  errorPolicy?: LogObjectSummaryPolicy;
 }
 
 function approvedProblemFields(
   problemDetails: ProblemDetails,
 ): Record<string, unknown> {
-  const { type, title, status, detail, timestamp, instance } = problemDetails;
-  const approved: Record<string, unknown> = {
-    type,
-    title,
-    status,
-    detail,
-    timestamp,
+  return {
+    type: problemDetails.type,
+    status: problemDetails.status,
+    outcome: "failure",
   };
-  if (instance !== undefined) {
-    approved.instance = instance;
-  }
-  return approved;
 }
 
-const MAX_STACK_FRAMES = 8;
 const MAX_CAUSE_DEPTH = 3;
 const MAX_AGGREGATE_ERRORS = 3;
 
-function truncateStack(stack: string): string {
-  const lines = stack.split("\n");
-  const frames = lines.slice(1);
-  if (frames.length <= MAX_STACK_FRAMES) {
-    return stack;
-  }
-  const kept = frames.slice(0, MAX_STACK_FRAMES);
-  const omitted = frames.length - MAX_STACK_FRAMES;
-  return [lines[0], ...kept, `... ${omitted} frames omitted`].join("\n");
-}
-
 function buildErrorMetadataSummary(
-  logger: ForgeLogger,
   error: unknown,
   status?: number,
 ): Record<string, unknown> {
-  const problemDetails = toProblemDetails(error, status ?? 500);
-  const metadata = approvedProblemFields(problemDetails);
+  if (isProblemDetails(error)) {
+    return approvedProblemFields(error);
+  }
+  if (isDomainError(error)) {
+    return buildDomainErrorMetadata(error);
+  }
+  const metadata: Record<string, unknown> = { outcome: "failure" };
   if (error instanceof Error) {
     metadata.errorName = error.name;
-    if (error.stack && isVerboseLevelEnabled(logger)) {
-      metadata.stack = truncateStack(error.stack);
-    }
+  }
+  if (status !== undefined) {
+    metadata.status = status;
   }
   return metadata;
 }
@@ -750,38 +747,24 @@ function isDomainError(
 function buildDomainErrorMetadata(
   error: { code: string } & Record<string, unknown>,
 ): Record<string, unknown> {
-  const metadata: Record<string, unknown> = {
-    errorCode: error.code,
-  };
-  if (typeof error.message === "string") {
-    metadata.title = error.message;
-  }
-  for (const [key, value] of Object.entries(error)) {
-    if (key === "code" || key === "message") {
-      continue;
-    }
-    metadata[key] = summarizeForLog(value);
-  }
-  return metadata;
+  return { errorCode: error.code, outcome: "failure" };
 }
 
 function buildErrorMetadata(
-  logger: ForgeLogger,
+  _logger: ForgeLogger,
   error: unknown,
   status?: number,
+  errorPolicy?: LogObjectSummaryPolicy,
 ): Record<string, unknown> {
-  if (isProblemDetails(error)) {
-    return approvedProblemFields(toProblemDetails(error, status));
+  if (errorPolicy) {
+    return { ...summarizeObjectForLog(error, errorPolicy), outcome: "failure" };
   }
-
-  if (isDomainError(error)) {
-    return buildDomainErrorMetadata(error);
-  }
-
-  const metadata = buildErrorMetadataSummary(logger, error, status);
+  const metadata = buildErrorMetadataSummary(error, status);
 
   if (
-    error instanceof Error &&
+    typeof error === "object" &&
+    error !== null &&
+    "cause" in error &&
     error.cause !== undefined &&
     error.cause !== null
   ) {
@@ -797,7 +780,7 @@ function buildErrorMetadata(
         break;
       }
       visited.add(current);
-      causes.push(buildErrorMetadataSummary(logger, current, status));
+      causes.push(buildErrorMetadataSummary(current));
       current = (current as Error).cause;
     }
     metadata.causes = causes;
@@ -806,7 +789,7 @@ function buildErrorMetadata(
   if (error instanceof AggregateError) {
     metadata.errors = error.errors
       .slice(0, MAX_AGGREGATE_ERRORS)
-      .map((nested) => buildErrorMetadataSummary(logger, nested, status));
+      .map((nested) => buildErrorMetadataSummary(nested));
   }
 
   return metadata;
@@ -827,7 +810,12 @@ export function logResult<T, E = ProblemDetails>(
     return;
   }
   const level = options?.errorLevel ?? "error";
-  const metadata = buildErrorMetadata(logger, result.error);
+  const metadata = buildErrorMetadata(
+    logger,
+    result.error,
+    undefined,
+    options?.errorPolicy,
+  );
   if (options?.summarizeErr) {
     Object.assign(metadata, options.summarizeErr(result.error));
   }
@@ -838,6 +826,7 @@ export interface LogErrorOptions {
   message?: string;
   level?: "warn" | "error" | "fatal";
   status?: number;
+  errorPolicy?: LogObjectSummaryPolicy;
 }
 
 export function logError(
@@ -846,7 +835,12 @@ export function logError(
   options?: LogErrorOptions,
 ): void {
   const level = options?.level ?? "error";
-  const metadata = buildErrorMetadata(logger, error, options?.status);
+  const metadata = buildErrorMetadata(
+    logger,
+    error,
+    options?.status,
+    options?.errorPolicy,
+  );
   logger[level](metadata, options?.message);
 }
 
@@ -855,6 +849,7 @@ export type DebugProbeLevel = "debug" | "trace";
 export interface LogProbeOptions {
   level?: DebugProbeLevel;
   metadata?: unknown | (() => unknown);
+  errorPolicy?: LogObjectSummaryPolicy;
 }
 
 function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
@@ -918,7 +913,7 @@ function logProbeError(
   }
   const debugProbe: Record<string, unknown> = {
     label,
-    error: buildErrorMetadata(logger, error),
+    error: buildErrorMetadata(logger, error, undefined, options?.errorPolicy),
   };
   const metadata = resolveProbeMetadata(options);
   if (metadata !== undefined) {

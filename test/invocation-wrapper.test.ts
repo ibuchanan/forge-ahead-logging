@@ -59,9 +59,10 @@ describe("withForgeInvocationLogging", () => {
     const [record] = records;
     expect(record.level).toBe("error");
     expect(record.outcome).toBe("failure");
-    expect(record.title).toBe("Internal Server Error");
-    expect(record.status).toBe(500);
-    expect(record.detail).toBe("boom");
+    expect(record.errorName).toBe("Error");
+    expect(record.title).toBeUndefined();
+    expect(record.status).toBeUndefined();
+    expect(record.detail).toBeUndefined();
   });
 
   it("logs and rethrows an async rejection", async () => {
@@ -78,7 +79,8 @@ describe("withForgeInvocationLogging", () => {
 
     const [record] = records;
     expect(record.outcome).toBe("failure");
-    expect(record.detail).toBe("rejected");
+    expect(record.errorName).toBe("Error");
+    expect(record.detail).toBeUndefined();
   });
 
   it("classifies an Err Result as failure", async () => {
@@ -99,8 +101,10 @@ describe("withForgeInvocationLogging", () => {
 
     const [record] = records;
     expect(record.outcome).toBe("failure");
+    expect(record.type).toBe("https://example.com/bad");
     expect(record.status).toBe(400);
-    expect(record.detail).toBe("bad");
+    expect(record.detail).toBeUndefined();
+    expect(record.title).toBeUndefined();
   });
 
   it("classifies an Ok Result as success", async () => {

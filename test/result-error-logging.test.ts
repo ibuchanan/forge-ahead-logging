@@ -57,11 +57,12 @@ describe("logResult err branch", () => {
     expect(record.level).toBe("error");
     expect(record).toMatchObject({
       type: problem.type,
-      title: problem.title,
       status: problem.status,
-      detail: problem.detail,
-      timestamp: problem.timestamp,
+      outcome: "failure",
     });
+    expect(record.title).toBeUndefined();
+    expect(record.detail).toBeUndefined();
+    expect(record.timestamp).toBeUndefined();
   });
 
   it("normalizes a non-ProblemDetails Error and includes errorName", () => {
@@ -71,23 +72,35 @@ describe("logResult err branch", () => {
     logResult(logger, err(error));
 
     const [record] = records;
-    expect(record.status).toBe(500);
-    expect(record.detail).toBe("bad input");
+    expect(record.status).toBeUndefined();
+    expect(record.detail).toBeUndefined();
     expect(record.errorName).toBe("TypeError");
+    expect(record.outcome).toBe("failure");
     expect(record.stack).toBeUndefined();
   });
 
-  it("includes the stack trace only when effective level is debug or trace", () => {
-    const { logger, records } = createCapturingLogger({
-      env: { LOG_LEVEL: "debug" },
+  it("never logs automatic error stacks even at debug level", () => {
+    const { logger: infoLogger, records: infoRecords } = createCapturingLogger({
+      env: {},
     });
+    const { logger: debugLogger, records: debugRecords } =
+      createCapturingLogger({
+        env: { LOG_LEVEL: "debug" },
+      });
     const error = new TypeError("bad input");
 
-    logResult(logger, err(error));
+    logResult(infoLogger, err(error));
+    logResult(debugLogger, err(error));
 
-    const [record] = records;
-    expect(record.stack).toContain("TypeError: bad input");
-    expect(record.stack).toContain("frames omitted");
+    const [infoRecord] = infoRecords;
+    expect(infoRecord.errorName).toBe("TypeError");
+    expect(infoRecord.outcome).toBe("failure");
+    expect(infoRecord.stack).toBeUndefined();
+
+    const [debugRecord] = debugRecords;
+    expect(debugRecord.stack).toBeUndefined();
+    expect(debugRecord.errorName).toBe("TypeError");
+    expect(debugRecord.outcome).toBe("failure");
   });
 
   it("merges summarizeErr metadata alongside approved ProblemDetails fields", () => {
@@ -116,7 +129,7 @@ describe("logResult domain errors", () => {
     expect(record.type).toBeUndefined();
   });
 
-  it("uses message as title when the domain error has a string message", () => {
+  it("does not log domain error message as title", () => {
     const { logger, records } = createCapturingLogger({ env: {} });
 
     logResult(
@@ -126,11 +139,12 @@ describe("logResult domain errors", () => {
 
     const [record] = records;
     expect(record.errorCode).toBe("invalid-seed-request");
-    expect(record.title).toBe("Bad seed");
+    expect(record.outcome).toBe("failure");
+    expect(record.title).toBeUndefined();
     expect(record.message).toBeUndefined();
   });
 
-  it("summarizes other own enumerable fields and includes them in the record", () => {
+  it("does not log other own enumerable fields on domain errors", () => {
     const { logger, records } = createCapturingLogger({ env: {} });
     const error = {
       code: "invalid-seed-request",
@@ -143,9 +157,10 @@ describe("logResult domain errors", () => {
 
     const [record] = records;
     expect(record.errorCode).toBe("invalid-seed-request");
-    expect(record.role).toBe("admin");
-    expect(record.nested).toEqual({ id: 1, secret: "[redacted]" });
-    expect(record.items).toEqual(["a", "b", "c"]);
+    expect(record.outcome).toBe("failure");
+    expect(record.role).toBeUndefined();
+    expect(record.nested).toBeUndefined();
+    expect(record.items).toBeUndefined();
   });
 
   it("does not treat a numeric code as a domain error", () => {
@@ -154,8 +169,9 @@ describe("logResult domain errors", () => {
     logResult(logger, err({ code: 409 }));
 
     const [record] = records;
-    expect(record.status).toBe(500);
+    expect(record.status).toBeUndefined();
     expect(record.errorCode).toBeUndefined();
+    expect(record.outcome).toBe("failure");
   });
 
   it("does not treat a string error as a domain error", () => {
@@ -164,8 +180,9 @@ describe("logResult domain errors", () => {
     logResult(logger, err("boom"));
 
     const [record] = records;
-    expect(record.status).toBe(500);
+    expect(record.status).toBeUndefined();
     expect(record.errorCode).toBeUndefined();
+    expect(record.outcome).toBe("failure");
   });
 
   it("merges summarizeErr metadata alongside domain error fields", () => {
@@ -212,11 +229,12 @@ describe("logError", () => {
 
     const [record] = records;
     expect(record.level).toBe("error");
-    expect(record.status).toBe(500);
-    expect(record.detail).toBe("boom");
+    expect(record.status).toBeUndefined();
+    expect(record.detail).toBeUndefined();
+    expect(record.outcome).toBe("failure");
   });
 
-  it("includes errorName for Error instances and gates the stack trace by effective level", () => {
+  it("never logs stacks even for Error instances at debug level", () => {
     const { logger: infoLogger, records: infoRecords } = createCapturingLogger({
       env: {},
     });
@@ -230,10 +248,11 @@ describe("logError", () => {
     const [infoRecord] = infoRecords;
     const [debugRecord] = debugRecords;
     expect(infoRecord.errorName).toBe("RangeError");
+    expect(infoRecord.outcome).toBe("failure");
     expect(infoRecord.stack).toBeUndefined();
     expect(debugRecord.errorName).toBe("RangeError");
-    expect(debugRecord.stack).toContain("RangeError: out of bounds");
-    expect(debugRecord.stack).toContain("frames omitted");
+    expect(debugRecord.outcome).toBe("failure");
+    expect(debugRecord.stack).toBeUndefined();
   });
 
   it("logs only approved fields for an existing ProblemDetails", () => {
@@ -251,11 +270,12 @@ describe("logError", () => {
     const [record] = records;
     expect(record).toMatchObject({
       type: problem.type,
-      title: problem.title,
       status: problem.status,
-      detail: problem.detail,
-      timestamp: problem.timestamp,
+      outcome: "failure",
     });
+    expect(record.title).toBeUndefined();
+    expect(record.detail).toBeUndefined();
+    expect(record.timestamp).toBeUndefined();
     expect(record.errorName).toBeUndefined();
   });
 });
@@ -280,8 +300,9 @@ describe("logger.result and logger.errorResult", () => {
 
     const [record] = records;
     expect(record.level).toBe("error");
-    expect(record.status).toBe(500);
-    expect(record.detail).toBe("boom");
+    expect(record.status).toBeUndefined();
+    expect(record.detail).toBeUndefined();
+    expect(record.outcome).toBe("failure");
   });
 });
 
@@ -295,6 +316,7 @@ describe("bounded error cause chains", () => {
     root.cause = cause1;
     cause1.cause = cause2;
     cause2.cause = cause3;
+    cause3.cause = new Error("fourth cause must be omitted");
 
     logError(logger, root);
 
@@ -302,12 +324,13 @@ describe("bounded error cause chains", () => {
     const causes = record.causes as Array<Record<string, unknown>>;
     expect(causes).toHaveLength(3);
     expect(causes).toEqual([
-      expect.objectContaining({ detail: "cause1", errorName: "Error" }),
-      expect.objectContaining({ detail: "cause2", errorName: "Error" }),
-      expect.objectContaining({ detail: "cause3", errorName: "Error" }),
+      expect.objectContaining({ errorName: "Error", outcome: "failure" }),
+      expect.objectContaining({ errorName: "Error", outcome: "failure" }),
+      expect.objectContaining({ errorName: "Error", outcome: "failure" }),
     ]);
-    expect(causes[0].status).toBe(500);
-    expect(causes[0].title).toBe("Internal Server Error");
+    expect(causes[0].detail).toBeUndefined();
+    expect(causes[0].status).toBeUndefined();
+    expect(causes[0].title).toBeUndefined();
   });
 
   it("stops before a cyclic cause chain", () => {
@@ -322,8 +345,14 @@ describe("bounded error cause chains", () => {
     const [record] = records;
     const causes = record.causes as Array<Record<string, unknown>>;
     expect(causes).toHaveLength(2);
-    expect(causes[0].detail).toBe("b");
-    expect(causes[1].detail).toBe("a");
+    expect(causes[0]).toEqual(
+      expect.objectContaining({ errorName: "Error", outcome: "failure" }),
+    );
+    expect(causes[1]).toEqual(
+      expect.objectContaining({ errorName: "Error", outcome: "failure" }),
+    );
+    expect(causes[0].detail).toBeUndefined();
+    expect(causes[1].detail).toBeUndefined();
   });
 });
 
@@ -344,17 +373,21 @@ describe("AggregateError summary", () => {
 
     const [record] = records;
     expect(record.errorName).toBe("AggregateError");
+    expect(record.outcome).toBe("failure");
     expect(record.errors).toHaveLength(3);
     expect(record.errors).toEqual([
-      expect.objectContaining({ detail: "one", errorName: "Error" }),
-      expect.objectContaining({ detail: "two", errorName: "Error" }),
-      expect.objectContaining({ detail: "three", errorName: "Error" }),
+      expect.objectContaining({ errorName: "Error", outcome: "failure" }),
+      expect.objectContaining({ errorName: "Error", outcome: "failure" }),
+      expect.objectContaining({ errorName: "Error", outcome: "failure" }),
     ]);
+    expect(
+      (record.errors as Array<Record<string, unknown>>)[0].detail,
+    ).toBeUndefined();
   });
 });
 
-describe("bounded stack traces", () => {
-  it("truncates a stack trace to a bounded frame count with a marker", () => {
+describe("stack omission regression", () => {
+  it("never logs stacks even for very deep error chains at debug level", () => {
     const { logger, records } = createCapturingLogger({
       env: { LOG_LEVEL: "debug" },
     });
@@ -367,9 +400,26 @@ describe("bounded stack traces", () => {
     logError(logger, error);
 
     const [record] = records;
-    const lines = (record.stack as string).split("\n");
-    const marker = lines.find((line) => line.includes("frames omitted"));
-    expect(marker).toBeDefined();
-    expect(lines.length).toBeLessThan(20);
+    expect(record.outcome).toBe("failure");
+    expect(record.errorName).toBe("Error");
+    expect(record.stack).toBeUndefined();
+  });
+
+  it("never logs stacks at any level including trace", () => {
+    const { logger, records } = createCapturingLogger({
+      env: { LOG_LEVEL: "trace" },
+    });
+    function deepStack(depth: number): Error {
+      if (depth <= 1) return new Error("deep");
+      return deepStack(depth - 1);
+    }
+    const error = deepStack(20);
+
+    logError(logger, error);
+
+    const [record] = records;
+    expect(record.outcome).toBe("failure");
+    expect(record.errorName).toBe("Error");
+    expect(record.stack).toBeUndefined();
   });
 });

@@ -144,11 +144,55 @@ Use it at resolver, trigger, scheduled-function, or web-trigger boundaries.
 
 ### `logResult(logger, result, options?)`
 
-Logs success or failure-shaped results, including domain errors that use the project’s `{ code: string }` error model and Problem Details values.
+Logs success or failure-shaped results, including domain errors that use the project's `{ code: string }` error model and Problem Details values.
+
+Options include:
+
+| Option | Meaning |
+| --- | --- |
+| `message` | Message or label for the record. |
+| `summarizeErr` | Callback enrichment applied *after* automatic error metadata (additive only; cannot remove fields). |
+| `errorPolicy` | Object Summary Policy that replaces automatic error projection. See [error policy](#error-policy). |
 
 ### `logError(logger, error, options?)`
 
-Normalizes an unknown thrown value into bounded error metadata. Error causes and stack frames are bounded.
+Projects a thrown value into minimal failure metadata. It does not translate or mutate the original error model.
+
+| Option | Meaning |
+| --- | --- |
+| `message` | Caller-supplied operational message. |
+| `level` | `"warn"`, `"error"` (default), or `"fatal"`. |
+| `status` | Explicit status for an exception or unknown value. No default HTTP status is synthesized; domain failures remain status-free, and existing Problem Details statuses are retained. |
+| `errorPolicy` | Object Summary Policy replacing the automatic error projection, including `status` inclusion. |
+
+### Automatic failure projection
+
+The same rules apply to `logResult` / `logger.result`, `logError` / `logger.errorResult`, invocation failures (returned `Err`, throws, rejections), and probe failures. Problem Details recognition uses `@forge-ahead/errors`' existing `isProblemDetails` predicate and takes precedence over domain-code recognition.
+
+| Input | Automatic error fields |
+| --- | --- |
+| Problem Details | Present `type` and `status`. |
+| Domain error (`{ code: string }`), including coded Error instances | `errorCode` from `code`; no synthesized HTTP status. |
+| Other Error instance | `errorName` from `name`; no synthesized HTTP status or Problem Details type. |
+| Other value | No value-derived fields; no fallback stringification. |
+
+All failure projections include `outcome: "failure"`. Success-result logging remains unchanged (`ok: true`, plus explicit `summarizeOk` enrichment).
+
+Causes on error objects are followed for at most three links with cycle detection. Each link uses a shallow automatic projection. `AggregateError.errors` includes at most three shallow automatic member projections; member causes/aggregates are not recursively expanded.
+
+Automatic projection omits error messages, Problem Details `title`, `detail`, `instance`, and `timestamp`, arbitrary properties, and raw stacks (including headers and custom frames). Debug/trace thresholds do not restore these fields. The record's normal logger `time` remains.
+
+**Application contract:** codes, Problem Details types, and Error names must be controlled operational identifiers. Their field names do not establish that arbitrary strings are non-sensitive. In particular, a `type` URI can identify a customer if the application constructs it from input; it is not sanitized by this package. This change affects logging only, not the downstream errors package or original error values.
+
+### Error policy
+
+`errorPolicy?: LogObjectSummaryPolicy` is available on `LogResultOptions`, `LogErrorOptions`, `ForgeInvocationLoggingOptions`, and `LogProbeOptions`. It reuses `summarizeObjectForLog`, with the same default bounds, transforms, missing-field behavior, and opt-in labels. It replaces the entire automatic error projection: unselected codes, types, statuses, causes, aggregate members, and names are absent. Only policy output plus the failure outcome remains. No separate error-policy framework is used.
+
+Result/error policies write fields at record root. Invocation records also attach their Forge event summary, duration, outcome, and operational message; lifecycle fields take precedence (including `kind: "forgeEvent"`). Probe policies appear under `debugProbe.error`, alongside the probe label and any explicit metadata. A policy is applied to the root error, not recursively to causes or aggregate members; nested paths must be selected explicitly.
+
+Existing `summarizeErr` callbacks on result logging remain additive after the selected projection and can overwrite fields. They cannot remove unsafe fields by merely leaving them out; `errorPolicy` is the replacement mechanism. Caller messages, callbacks, policies, probe labels/metadata, logger bindings, and ambient context remain application decisions and can reintroduce excluded data.
+
+**Output-contract change:** automatic messages/text, arbitrary properties, raw stacks, and synthetic HTTP `500`/type values are removed. See [migration steps](how-to.md#migrate-from-previous-error-logging-breaking-change).
 
 ## Debug probes
 

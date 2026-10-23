@@ -98,13 +98,43 @@ but no safe, stable public message.
 `logResult` and `logError` therefore serve different but related purposes.
 Result logging preserves the application’s success/failure model,
 including the project’s domain error shape.
-Error logging normalizes thrown values,
-bounds stacks and causes,
+Error logging projects thrown values into minimal operational metadata,
+bounds cause and aggregate summaries, omits raw stacks,
 and keeps the original control flow available to the caller.
 
 This distinction prevents a common observability mistake:
 treating every non-success outcome as an infrastructure crash,
 or treating every thrown value as safe to stringify wholesale.
+
+## Automatic error logging is allow-list based
+
+Error logging operates on an allow-list principle:
+only controlled, application-defined fields are collected automatically.
+Error codes, Problem Details types and statuses, and Error names
+provide operational meaning without copying the whole failure.
+Their values must be controlled by the application; their field names do not prove they are non-sensitive.
+Messages, identifying instance URLs, stacks, and arbitrary properties are excluded by default.
+
+Why?
+An error message, path, URL, instance identifier, or property value
+might contain user-generated content, personal data, authentication tokens, or secrets.
+A stable Error name (`Error`, `SyntaxError`, `ReferenceError`) distinguishes failure classes;
+but custom `name` values, like codes and type URIs, still need an application contract.
+The `message` property is often populated from inputs and is not collected automatically.
+
+A domain error that uses controlled `code` values (e.g., `"CONFLICT"`, `"RATE_LIMIT"`)
+does not prove that the same error's `message` or arbitrary properties are safe.
+The code is an application contract; the message and properties are not.
+
+When troubleshooting requires additional fields,
+applications use an Object Summary Policy to select them explicitly.
+The policy is an application decision, documented in code, not a claim that arbitrary strings are non-sensitive.
+This keeps the default case safe and makes deliberate exceptions visible to reviewers.
+
+The same allow-list approach applies to nested causes (up to 3 levels)
+and AggregateError members (up to 3):
+each uses the same controlled projections,
+and the policy does not restore excluded defaults.
 
 ## Why demo logging is a separate API
 

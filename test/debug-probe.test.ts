@@ -63,7 +63,7 @@ describe("logProbe", () => {
     expect(record.level).toBe("debug");
     expect(record.debugProbe).toMatchObject({
       label: "fetch",
-      error: { detail: "network down" },
+      error: { errorName: "Error", outcome: "failure" },
     });
   });
 
@@ -83,7 +83,7 @@ describe("logProbe", () => {
     expect(record.level).toBe("debug");
     expect(record.debugProbe).toMatchObject({
       label: "compute",
-      error: { detail: "boom" },
+      error: { errorName: "Error", outcome: "failure" },
     });
   });
 
