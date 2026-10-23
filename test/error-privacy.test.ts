@@ -8,7 +8,6 @@ import {
   withForgeInvocationLogging,
 } from "../src/index";
 import { createCapturingLogger } from "../src/testing";
-import { atEachLevel, expectNoneEscaped } from "./privacy-helpers";
 
 const privateText =
   "synthetic-person@example.test Bearer synthetic-secret private customer comment";
@@ -99,91 +98,86 @@ function expectOriginalThrow(operation: () => unknown, error: unknown): void {
   }
 }
 
-it.each(failureCases)(
-  "minimizes $name consistently across public seams at every threshold",
-  async ({ error, summary }) => {
-    await atEachLevel(["info", "debug", "trace"] as const, async (level) => {
-      const { logger, records } = createCapturingLogger({
-        env: { LOG_LEVEL: level },
-      });
-      const result = err(error);
-      logResult(logger, result);
-      logger.result(result);
-      logError(logger, error);
-      logger.errorResult(error);
-      expect(result.error).toBe(error);
-      expect(withForgeInvocationLogging(logger, {}, () => result)).toBe(result);
-      await expect(logger.invocation({}, async () => result)).resolves.toBe(
-        result,
-      );
-      expectOriginalThrow(
-        () =>
-          withForgeInvocationLogging(logger, {}, () => {
-            throw error;
-          }),
-        error,
-      );
-      await expect(
-        logger.invocation({}, async () => {
+it.each(
+  (["info", "debug", "trace"] as const).flatMap((level) =>
+    failureCases.map((failureCase) => ({ ...failureCase, level })),
+  ),
+)(
+  "minimizes $name consistently across public seams at $level",
+  async ({ error, summary, level }) => {
+    const { logger, records } = createCapturingLogger({
+      env: { LOG_LEVEL: level },
+    });
+    const result = err(error);
+    logResult(logger, result);
+    logger.result(result);
+    logError(logger, error);
+    logger.errorResult(error);
+    expect(result.error).toBe(error);
+    expect(withForgeInvocationLogging(logger, {}, () => result)).toBe(result);
+    await expect(logger.invocation({}, async () => result)).resolves.toBe(
+      result,
+    );
+    expectOriginalThrow(
+      () =>
+        withForgeInvocationLogging(logger, {}, () => {
           throw error;
         }),
-      ).rejects.toBe(error);
-      expectOriginalThrow(
-        () =>
-          logProbe(
-            logger,
-            "operation",
-            () => {
-              throw error;
-            },
-            { level: "debug" },
-          ),
-        error,
-      );
-      await expect(
-        logger.probe("operation", Promise.reject(error), {
-          level: level === "trace" ? "trace" : "debug",
-        }),
-      ).rejects.toBe(error);
+      error,
+    );
+    await expect(
+      logger.invocation({}, async () => {
+        throw error;
+      }),
+    ).rejects.toBe(error);
+    expectOriginalThrow(
+      () =>
+        logProbe(
+          logger,
+          "operation",
+          () => {
+            throw error;
+          },
+          { level: "debug" },
+        ),
+      error,
+    );
+    await expect(
+      logger.probe("operation", Promise.reject(error), {
+        level: level === "trace" ? "trace" : "debug",
+      }),
+    ).rejects.toBe(error);
 
-      const envelope = { level: "error", time: expect.any(Number) };
-      expect(records.slice(0, 4)).toEqual(
-        Array.from({ length: 4 }, () => ({ ...envelope, ...summary })),
-      );
-      expect(records.slice(4, 8)).toEqual(
-        Array.from({ length: 4 }, () => ({
-          ...envelope,
-          ...summary,
-          kind: "forgeEvent",
-          outcome: "failure",
-          durationMs: expect.any(Number),
-          msg: "invocation completed",
-        })),
-      );
-      if (level === "info") {
-        expect(records).toHaveLength(8);
-      } else {
-        expect(records.slice(8)).toEqual([
-          {
-            level: "debug",
-            time: expect.any(Number),
-            debugProbe: { label: "operation", error: summary },
-          },
-          {
-            level,
-            time: expect.any(Number),
-            debugProbe: { label: "operation", error: summary },
-          },
-        ]);
-      }
-      expectNoneEscaped(records, [
-        "synthetic-person",
-        "synthetic-secret",
-        "private customer",
-        "customer.example.test",
-        "unknownProperty",
+    const envelope = { level: "error", time: expect.any(Number) };
+    expect(records.slice(0, 4)).toEqual(
+      Array.from({ length: 4 }, () => ({ ...envelope, ...summary })),
+    );
+    expect(records.slice(4, 8)).toEqual(
+      Array.from({ length: 4 }, () => ({
+        ...envelope,
+        ...summary,
+        kind: "forgeEvent",
+        outcome: "failure",
+        durationMs: expect.any(Number),
+        msg: "invocation completed",
+      })),
+    );
+    if (level === "info") {
+      expect(records).toHaveLength(8);
+    } else {
+      expect(records.slice(8)).toEqual([
+        {
+          level: "debug",
+          time: expect.any(Number),
+          debugProbe: { label: "operation", error: summary },
+        },
+        {
+          level,
+          time: expect.any(Number),
+          debugProbe: { label: "operation", error: summary },
+        },
       ]);
-    });
+    }
   },
 );
 

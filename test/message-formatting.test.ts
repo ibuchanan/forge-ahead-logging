@@ -1,3 +1,4 @@
+import fc from "fast-check";
 import { assert, describe, expect, it } from "vitest";
 import { createCapturingLogger } from "../src/testing";
 
@@ -33,31 +34,47 @@ describe("message formatting", () => {
     expect(record["msg"]).toBe('Object: {"foo":"bar"}');
   });
 
-  it("supports extra arguments on all seven level methods", () => {
-    const { logger, records } = createCapturingLogger({
-      env: { LOG_LEVEL: "trace" },
-    });
+  it.each(["fatal", "error", "warn", "info", "debug", "trace"] as const)(
+    "supports extra arguments on the %s level method",
+    (level) => {
+      const { logger, records } = createCapturingLogger({
+        env: { LOG_LEVEL: "trace" },
+      });
 
-    logger.fatal({}, "fatal %s", "one");
-    logger.error({}, "error %s", "two");
-    logger.warn({}, "warn %s", "three");
-    logger.info({}, "info %s", "four");
-    logger.debug({}, "debug %s", "five");
-    logger.trace({}, "trace %s", "six");
+      logger[level]({}, `${level} %s`, "value");
 
-    expect(records).toHaveLength(6);
-    assert.isDefined(records[0]);
-    expect(records[0]["msg"]).toBe("fatal one");
-    assert.isDefined(records[1]);
-    expect(records[1]["msg"]).toBe("error two");
-    assert.isDefined(records[2]);
-    expect(records[2]["msg"]).toBe("warn three");
-    assert.isDefined(records[3]);
-    expect(records[3]["msg"]).toBe("info four");
-    assert.isDefined(records[4]);
-    expect(records[4]["msg"]).toBe("debug five");
-    assert.isDefined(records[5]);
-    expect(records[5]["msg"]).toBe("trace six");
+      expect(records.map((record) => record["msg"])).toEqual([
+        `${level} value`,
+      ]);
+    },
+  );
+
+  it("substitutes any printable string, integer, or JSON value like %s, %d, and %j", () => {
+    fc.assert(
+      fc.property(
+        fc.stringMatching(/^[A-Za-z0-9 _-]{0,20}$/),
+        fc.integer(),
+        fc
+          .jsonValue({ maxDepth: 2 })
+          // pino's %j drops an own "__proto__" key and single-quotes top-level strings;
+          // neither is behavior worth pinning here.
+          .filter(
+            (value) =>
+              typeof value === "object" &&
+              value !== null &&
+              !JSON.stringify(value).includes("__proto__"),
+          ),
+        (text, count, json) => {
+          const { logger, records } = createCapturingLogger();
+
+          logger.info({}, "s=%s d=%d j=%j", text, count, json);
+
+          expect(records[0]?.["msg"]).toBe(
+            `s=${text} d=${count} j=${JSON.stringify(json)}`,
+          );
+        },
+      ),
+    );
   });
 
   it("supports message-only calls with extra arguments", () => {

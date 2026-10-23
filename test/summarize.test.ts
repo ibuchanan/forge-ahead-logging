@@ -1,7 +1,13 @@
 import fc from "fast-check";
 import { assert, describe, expect, it } from "vitest";
 import { type JSONValue, summarizeForLog } from "../src/index";
-import { secretKey, secretKeys } from "./privacy-arbitraries";
+import { summarizeShapeForLog } from "../src/summarize";
+import {
+  plant,
+  plantedValue,
+  secretKey,
+  secretKeys,
+} from "./privacy-arbitraries";
 
 describe("summarizeForLog", () => {
   it("passes through JSON-safe primitives unchanged", () => {
@@ -11,34 +17,23 @@ describe("summarizeForLog", () => {
     expect(summarizeForLog(null)).toBe(null);
   });
 
-  it("truncates long strings with an omitted character count", () => {
-    const longString = "a".repeat(300);
-
-    const result = summarizeForLog(longString);
-
-    expect(result).toBe(`${"a".repeat(240)}...[60 chars omitted]`);
-  });
-
-  it("bounds arrays to maxArrayItems plus an omitted-items marker", () => {
-    const result = summarizeForLog([1, 2, 3, 4, 5, 6, 7, 8]);
-
-    expect(result).toEqual([1, 2, 3, 4, 5, "[3 more items omitted]"]);
-  });
-
-  it("bounds objects to maxObjectKeys plus an omitted-keys marker", () => {
-    const obj: Record<string, number> = {};
-    for (let i = 0; i < 15; i++) {
-      obj[`key${i}`] = i;
-    }
-
-    const result = summarizeForLog(obj);
-
-    const expected: Record<string, unknown> = {};
-    for (let i = 0; i < 12; i++) {
-      expected[`key${i}`] = i;
-    }
-    expected["[3 more keys omitted]"] = true;
-    expect(result).toEqual(expected);
+  it("applies the default budgets of 240 characters, 5 array items, and 12 object keys", () => {
+    expect(summarizeForLog("a".repeat(241))).toBe(
+      `${"a".repeat(240)}...[1 chars omitted]`,
+    );
+    expect(summarizeForLog([1, 2, 3, 4, 5, 6])).toEqual([
+      1,
+      2,
+      3,
+      4,
+      5,
+      "[1 more items omitted]",
+    ]);
+    const keys = Array.from({ length: 13 }, (_, i) => [`key${i}`, i] as const);
+    expect(summarizeForLog(Object.fromEntries(keys))).toEqual({
+      ...Object.fromEntries(keys.slice(0, 12)),
+      "[1 more keys omitted]": true,
+    });
   });
 
   it("preserves string prefixes and accounts for every omitted UTF-16 code unit", () => {
@@ -226,6 +221,73 @@ describe("summarizeForLog", () => {
         });
       }),
       { examples: secretKeys.map((key): [string] => [key]) },
+    );
+  });
+});
+
+describe("summarizeShapeForLog", () => {
+  const limits = fc.record({
+    maxDepth: fc.nat({ max: 5 }),
+    maxArrayItems: fc.nat({ max: 6 }),
+    maxObjectKeys: fc.nat({ max: 6 }),
+  });
+
+  type ShapeOptions = {
+    maxDepth: number;
+    maxArrayItems: number;
+    maxObjectKeys: number;
+  };
+
+  function leafShape(input: unknown): unknown {
+    if (input === null) return { type: "null" };
+    if (typeof input === "string") {
+      return { type: "string", length: input.length };
+    }
+    return { type: typeof input };
+  }
+
+  // Expected shape computed from the contract: exact counts, the retained input
+  // prefix, and `omitted` equal to exactly what was dropped.
+  function expectedShape(
+    input: unknown,
+    options: ShapeOptions,
+    depth = 0,
+  ): unknown {
+    if (input === null || typeof input !== "object") return leafShape(input);
+    const isArray = Array.isArray(input);
+    const type = isArray ? "array" : "object";
+    if (depth >= options.maxDepth) return { type, omitted: "max depth" };
+    const children = isArray ? input : Object.values(input);
+    const limit = isArray ? options.maxArrayItems : options.maxObjectKeys;
+    return {
+      type,
+      [isArray ? "items" : "keys"]: children.length,
+      values: children
+        .slice(0, limit)
+        .map((child) => expectedShape(child, options, depth + 1)),
+      ...(children.length > limit ? { omitted: children.length - limit } : {}),
+    };
+  }
+
+  it("reports exact counts and omissions for any JSON tree at any limits", () => {
+    fc.assert(
+      fc.property(fc.jsonValue({ maxDepth: 5 }), limits, (value, options) => {
+        expect(summarizeShapeForLog(value, options)).toEqual(
+          expectedShape(value, options),
+        );
+      }),
+    );
+  });
+
+  it("never emits leaf contents or canary-named keys, however deeply the canary is planted", () => {
+    fc.assert(
+      fc.property(plant, limits, (p, options) => {
+        const shape = summarizeShapeForLog(
+          { [p.root]: plantedValue(p) },
+          options,
+        );
+        expect(JSON.stringify(shape)).not.toContain(p.canary);
+      }),
     );
   });
 });

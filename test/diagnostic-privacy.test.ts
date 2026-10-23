@@ -10,7 +10,7 @@ import {
   withForgeInvocationLogging,
 } from "../src/index";
 import { createCapturingLogger } from "../src/testing";
-import { atEachLevel, expectNoneEscaped } from "./privacy-helpers";
+import { expectNoneEscaped } from "./privacy-helpers";
 
 function eventShapeOptions(includeEventShape: boolean | undefined) {
   return includeEventShape === undefined ? {} : { includeEventShape };
@@ -29,133 +29,135 @@ function expectPrivateDataAbsent(value: unknown): void {
 
 afterEach(() => vi.unstubAllEnvs());
 
-it.each([
-  {
-    setting: "disabled",
-    includeEventShape: false,
-    envShape: "true",
-    enabled: false,
-  },
-  {
-    setting: "explicit",
-    includeEventShape: true,
-    envShape: "false",
-    enabled: true,
-  },
-  {
-    setting: "environment",
-    includeEventShape: undefined,
-    envShape: "true",
-    enabled: true,
-  },
-  {
-    setting: "default",
-    includeEventShape: undefined,
-    envShape: "false",
-    enabled: false,
-  },
-])(
-  "does not restore excluded data with $setting event shape at every threshold",
-  async ({ includeEventShape, envShape, enabled }) => {
-    await atEachLevel(["info", "debug", "trace"] as const, async (level) => {
-      vi.stubEnv("FORGE_LOG_LABELS", "true");
-      vi.stubEnv("FORGE_LOG_EVENT_SHAPE", envShape);
-      const { logger, records } = createCapturingLogger({
-        env: { LOG_LEVEL: level },
-      });
-      const event = Object.freeze({
-        method: "POST",
-        path: privateText,
-        contextToken: privateText,
-        queryParameters: { [privateText]: [privateText] },
-        context: { cloudId: privateText, accountId: privateText },
-        headers: { authorization: privateText },
-        body: privateText,
-        [privateText]: privateText,
-      });
-      expect(summarizeForgeInvocation(event)).toEqual({
-        kind: "forgeEvent",
-        method: "POST",
-        headers: { omitted: true, keys: 1 },
-        body: { omitted: true, length: privateText.length },
-      });
-      const invocationOptions = eventShapeOptions(includeEventShape);
-      logForgeInvocation(logger, event, "received", invocationOptions);
-      logger.forgeInvocation(event, "received", invocationOptions);
-      const options = { ...invocationOptions, logEntry: true };
-      const result = { processed: true };
-      expect(
-        withForgeInvocationLogging(logger, event, () => result, options),
-      ).toBe(result);
-      await expect(
-        logger.invocation(event, async () => result, options),
-      ).resolves.toBe(result);
-      const failure = Object.assign(new Error(privateText), {
-        privateField: privateText,
-      });
-      const failed = err({
-        code: "FAILED",
-        message: privateText,
-        [privateText]: privateText,
-      });
-      expect(logger.invocation(event, () => failed, options)).toBe(failed);
-      await expect(
-        logger.invocation(
-          event,
-          async () => {
-            throw failure;
-          },
-          options,
-        ),
-      ).rejects.toBe(failure);
-      const probeLevel = level === "trace" ? "trace" : "debug";
-      const expression = vi.fn(() => event);
-      const metadata = vi.fn(() => ({ [privateText]: privateText }));
-      expect(
-        logger.probe("operation", expression, {
-          level: probeLevel,
-          metadata,
-        }),
-      ).toBe(event);
-      await expect(
-        logger.probe("operation", Promise.reject(failure), {
-          level: probeLevel,
-          metadata,
-        }),
-      ).rejects.toBe(failure);
-      expect(expression).toHaveBeenCalledOnce();
-      expect(metadata).toHaveBeenCalledTimes(level === "info" ? 0 : 2);
-      const uninstall = installConsoleCapture(logger);
-      try {
-        console.info("operation", event, failure, privateText);
-        console.debug("operation", event);
-        console.warn(event);
-        console.error(failure);
-      } finally {
-        uninstall();
-      }
-      expect(records).toHaveLength(level === "info" ? 13 : 16);
-      const invocationRecords = records.filter(
-        (record) => record["kind"] === "forgeEvent",
-      );
-      expect(invocationRecords).toHaveLength(10);
-      const shapeRecords = invocationRecords.filter((record) =>
-        ["received", "invocation started"].includes(String(record["msg"])),
-      );
-      expect(shapeRecords).toHaveLength(6);
-      for (const record of shapeRecords) {
-        if (enabled && level !== "info")
-          expect(record["eventShape"]).toMatchObject({
-            type: "object",
-            keys: 8,
-          });
-        else expect(record["eventShape"]).toBeUndefined();
-        if (includeEventShape === true && level === "info")
-          expect(record["eventShapeOmitted"]).toBe("requires debug or trace");
-      }
-      expectPrivateDataAbsent(records);
-      expect(event.contextToken).toBe(privateText);
+it.each(
+  (["info", "debug", "trace"] as const).flatMap((level) =>
+    [
+      {
+        setting: "disabled",
+        includeEventShape: false,
+        envShape: "true",
+        enabled: false,
+      },
+      {
+        setting: "explicit",
+        includeEventShape: true,
+        envShape: "false",
+        enabled: true,
+      },
+      {
+        setting: "environment",
+        includeEventShape: undefined,
+        envShape: "true",
+        enabled: true,
+      },
+      {
+        setting: "default",
+        includeEventShape: undefined,
+        envShape: "false",
+        enabled: false,
+      },
+    ].map((row) => ({ ...row, level })),
+  ),
+)(
+  "does not restore excluded data with $setting event shape at $level",
+  async ({ includeEventShape, envShape, enabled, level }) => {
+    vi.stubEnv("FORGE_LOG_LABELS", "true");
+    vi.stubEnv("FORGE_LOG_EVENT_SHAPE", envShape);
+    const { logger, records } = createCapturingLogger({
+      env: { LOG_LEVEL: level },
     });
+    const event = Object.freeze({
+      method: "POST",
+      path: privateText,
+      contextToken: privateText,
+      queryParameters: { [privateText]: [privateText] },
+      context: { cloudId: privateText, accountId: privateText },
+      headers: { authorization: privateText },
+      body: privateText,
+      [privateText]: privateText,
+    });
+    expect(summarizeForgeInvocation(event)).toEqual({
+      kind: "forgeEvent",
+      method: "POST",
+      headers: { omitted: true, keys: 1 },
+      body: { omitted: true, length: privateText.length },
+    });
+    const invocationOptions = eventShapeOptions(includeEventShape);
+    logForgeInvocation(logger, event, "received", invocationOptions);
+    logger.forgeInvocation(event, "received", invocationOptions);
+    const options = { ...invocationOptions, logEntry: true };
+    const result = { processed: true };
+    expect(
+      withForgeInvocationLogging(logger, event, () => result, options),
+    ).toBe(result);
+    await expect(
+      logger.invocation(event, async () => result, options),
+    ).resolves.toBe(result);
+    const failure = Object.assign(new Error(privateText), {
+      privateField: privateText,
+    });
+    const failed = err({
+      code: "FAILED",
+      message: privateText,
+      [privateText]: privateText,
+    });
+    expect(logger.invocation(event, () => failed, options)).toBe(failed);
+    await expect(
+      logger.invocation(
+        event,
+        async () => {
+          throw failure;
+        },
+        options,
+      ),
+    ).rejects.toBe(failure);
+    const probeLevel = level === "trace" ? "trace" : "debug";
+    const expression = vi.fn(() => event);
+    const metadata = vi.fn(() => ({ [privateText]: privateText }));
+    expect(
+      logger.probe("operation", expression, {
+        level: probeLevel,
+        metadata,
+      }),
+    ).toBe(event);
+    await expect(
+      logger.probe("operation", Promise.reject(failure), {
+        level: probeLevel,
+        metadata,
+      }),
+    ).rejects.toBe(failure);
+    expect(expression).toHaveBeenCalledOnce();
+    expect(metadata).toHaveBeenCalledTimes(level === "info" ? 0 : 2);
+    const uninstall = installConsoleCapture(logger);
+    try {
+      console.info("operation", event, failure, privateText);
+      console.debug("operation", event);
+      console.warn(event);
+      console.error(failure);
+    } finally {
+      uninstall();
+    }
+    expect(records).toHaveLength(level === "info" ? 13 : 16);
+    const invocationRecords = records.filter(
+      (record) => record["kind"] === "forgeEvent",
+    );
+    expect(invocationRecords).toHaveLength(10);
+    const shapeRecords = invocationRecords.filter((record) =>
+      ["received", "invocation started"].includes(String(record["msg"])),
+    );
+    expect(shapeRecords).toHaveLength(6);
+    for (const record of shapeRecords) {
+      if (enabled && level !== "info")
+        expect(record["eventShape"]).toMatchObject({
+          type: "object",
+          keys: 8,
+        });
+      else expect(record["eventShape"]).toBeUndefined();
+      if (includeEventShape === true && level === "info")
+        expect(record["eventShapeOmitted"]).toBe("requires debug or trace");
+    }
+    expectPrivateDataAbsent(records);
+    expect(event.contextToken).toBe(privateText);
   },
 );
 

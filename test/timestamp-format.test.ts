@@ -4,6 +4,7 @@ import { createCapturingLogger } from "../src/testing";
 
 afterEach(() => {
   configureForgeLogger({});
+  vi.restoreAllMocks();
 });
 
 const ISO_8601_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
@@ -40,6 +41,5 @@ describe("timestamp format", () => {
     const record = JSON.parse(spy.mock.calls[0][0] as string);
     expect(typeof record["time"]).toBe("string");
     expect(record["time"]).toMatch(ISO_8601_PATTERN);
-    spy.mockRestore();
   });
 });
