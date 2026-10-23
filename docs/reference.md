@@ -77,6 +77,21 @@ Context is for enrichment only. It is not a substitute for validating identity, 
 
 Produces a bounded, JSON-safe, value-bearing representation. Summary options control depth, array size, object keys, string length, and other limits. It retains ordinary leaf values and property names; bounds and common secret-shaped-key redaction are not automatic privacy. Automatic structural diagnostics use a separate internal representation, not this API.
 
+Omissions are marked in place as `[omitted: ...]`, with the same reasons and
+counts that [structural diagnostics](#structural-diagnostics) report in their
+`omitted` field:
+
+| Omission                      | Marker                                             |
+| ----------------------------- | -------------------------------------------------- |
+| Depth limit                   | `"[omitted: max depth]"` in place of the value     |
+| Circular reference            | `"[omitted: circular]"` in place of the value      |
+| Array over `maxArrayItems`    | Final element `"[omitted: N items]"`               |
+| Object over `maxObjectKeys`   | Extra key `"[omitted: N keys]": true`              |
+| String over `maxStringLength` | The retained prefix plus `"...[omitted: N chars]"` |
+
+Other values are replaced by `[undefined]`, `[function]`, `[symbol]`,
+`[bigint N]`, `[accessor]` (getters are not invoked), or `[redacted]`.
+
 ### `withDefaultRedaction(redact?)`
 
 Returns Pino redaction options containing the package’s default secret-shaped paths. Caller paths are additive and retain Pino's explicit-path/wildcard syntax; a path such as `custom` does not match every nested key named `custom`. `remove` and caller `censor` options do not replace the fixed `[redacted]` censor. This helper alone does not install recursive enforcement on arbitrary Pino loggers.

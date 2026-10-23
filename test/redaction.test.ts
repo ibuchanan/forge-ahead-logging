@@ -232,7 +232,7 @@ describe("createForgeLogger default redaction", () => {
         details: {
           headers:
             source === "recordMetadata"
-              ? "[max depth reached]"
+              ? "[omitted: max depth]"
               : { cookie: "[redacted]", authorization: "[redacted]" },
           custom: "[redacted]",
           count: 2,

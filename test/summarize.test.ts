@@ -19,7 +19,7 @@ describe("summarizeForLog", () => {
 
   it("applies the default budgets of 240 characters, 5 array items, and 12 object keys", () => {
     expect(summarizeForLog("a".repeat(241))).toBe(
-      `${"a".repeat(240)}...[1 chars omitted]`,
+      `${"a".repeat(240)}...[omitted: 1 chars]`,
     );
     expect(summarizeForLog([1, 2, 3, 4, 5, 6])).toEqual([
       1,
@@ -27,12 +27,12 @@ describe("summarizeForLog", () => {
       3,
       4,
       5,
-      "[1 more items omitted]",
+      "[omitted: 1 items]",
     ]);
     const keys = Array.from({ length: 13 }, (_, i) => [`key${i}`, i] as const);
     expect(summarizeForLog(Object.fromEntries(keys))).toEqual({
       ...Object.fromEntries(keys.slice(0, 12)),
-      "[1 more keys omitted]": true,
+      "[omitted: 1 keys]": true,
     });
   });
 
@@ -51,7 +51,7 @@ describe("summarizeForLog", () => {
             );
             const marker = result
               .slice(maxStringLength)
-              .match(/^\.\.\.\[(\d+) chars omitted\]$/);
+              .match(/^\.\.\.\[omitted: (\d+) chars\]$/);
             expect(marker).not.toBeNull();
             expect(maxStringLength + Number(marker?.[1])).toBe(value.length);
           }
@@ -87,7 +87,7 @@ describe("summarizeForLog", () => {
           } else {
             expect(result).toHaveLength(maxArrayItems + 1);
             expect(result.at(-1)).toBe(
-              `[${value.length - retained} more items omitted]`,
+              `[omitted: ${value.length - retained} items]`,
             );
           }
         },
@@ -126,9 +126,9 @@ describe("summarizeForLog", () => {
             expect(result).toEqual(input);
           } else {
             expect(Object.keys(result)).toHaveLength(maxObjectKeys + 1);
-            expect(
-              result[`[${entries.length - retained} more keys omitted]`],
-            ).toBe(true);
+            expect(result[`[omitted: ${entries.length - retained} keys]`]).toBe(
+              true,
+            );
           }
         },
       ),
@@ -170,7 +170,7 @@ describe("summarizeForLog", () => {
           const leafDepth = arrays.length + Number(!scalar);
           expect(result).toEqual(
             maxDepth < leafDepth
-              ? "[max depth reached]"
+              ? "[omitted: max depth]"
               : scalar
                 ? 7
                 : { value: 7 },
@@ -197,7 +197,7 @@ describe("summarizeForLog", () => {
     const result = summarizeForLog(obj) as Record<string, unknown>;
 
     expect(result["name"]).toBe("root");
-    expect(result["self"]).toBe("[circular]");
+    expect(result["self"]).toBe("[omitted: circular]");
   });
 
   it("converts non-JSON values into string markers", () => {
@@ -263,6 +263,59 @@ describe("summarizeForLog", () => {
         });
       }),
       { examples: secretKeys.map((key): [string] => [key]) },
+    );
+  });
+});
+
+describe("omission markers", () => {
+  const shapeOf = (value: unknown, options = {}) =>
+    summarizeShapeForLog(value, options) as {
+      omitted?: number | string;
+      values: { omitted?: number | string }[];
+    };
+
+  it("name a depth cutoff with the structural reason", () => {
+    const input = { a: { b: 1 } };
+    const reason = shapeOf(input, { maxDepth: 1 }).values[0]?.omitted;
+
+    expect(reason).toBe("max depth");
+    expect(summarizeForLog(input, { maxDepth: 1 })).toEqual({
+      a: `[omitted: ${reason}]`,
+    });
+  });
+
+  it("name a cycle with the structural reason", () => {
+    const input: Record<string, unknown> = {};
+    input["self"] = input;
+    const reason = shapeOf(input).values[0]?.omitted;
+
+    expect(reason).toBe("circular");
+    expect(summarizeForLog(input)).toEqual({ self: `[omitted: ${reason}]` });
+  });
+
+  it("count omitted items and keys with the structural count", () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 1, max: 30 }),
+        fc.nat({ max: 29 }),
+        (length, limit) => {
+          fc.pre(length > limit);
+          const items = Array.from({ length }, (_, index) => index);
+          const keyed = Object.fromEntries(items.map((n) => [`k${n}`, n]));
+          const count = shapeOf(items, { maxArrayItems: limit }).omitted;
+          const keyCount = shapeOf(keyed, { maxObjectKeys: limit }).omitted;
+
+          expect(count).toBe(length - limit);
+          expect(
+            (summarizeForLog(items, { maxArrayItems: limit }) as unknown[]).at(
+              -1,
+            ),
+          ).toBe(`[omitted: ${count} items]`);
+          expect(
+            summarizeForLog(keyed, { maxObjectKeys: limit }),
+          ).toHaveProperty([`[omitted: ${keyCount} keys]`], true);
+        },
+      ),
     );
   });
 });

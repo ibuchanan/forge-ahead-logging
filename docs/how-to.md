@@ -305,6 +305,22 @@ can resolve a per-name override.
 | `resolveLogLevel(name, env)` | `resolveLogLevel({ name, env })` |
 | `getLogLevel(env)`           | `getLogLevel({ env })`           |
 
+## Migrate value summary omission markers (breaking change)
+
+`summarizeForLog`, and every field that uses it, such as `identity` policy
+fields and `recordMetadata`, now marks omissions as `[omitted: ...]`. The
+reasons and counts match the `omitted` field of
+[structural diagnostics](reference.md#structural-diagnostics). Update log
+queries and parsers that match the old marker text:
+
+| Omission           | Before                          | After                         |
+| ------------------ | ------------------------------- | ----------------------------- |
+| Depth limit        | `"[max depth reached]"`         | `"[omitted: max depth]"`      |
+| Circular reference | `"[circular]"`                  | `"[omitted: circular]"`       |
+| Extra array items  | `"[3 more items omitted]"`      | `"[omitted: 3 items]"`        |
+| Extra object keys  | `"[3 more keys omitted]": true` | `"[omitted: 3 keys]": true`   |
+| Long string        | `"abc...[60 chars omitted]"`    | `"abc...[omitted: 60 chars]"` |
+
 ## Capture third-party console output temporarily
 
 Install capture around a dependency or migration path:

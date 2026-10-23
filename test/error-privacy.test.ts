@@ -230,7 +230,7 @@ describe("automatic error privacy", () => {
       causeCode: "BUSY",
       attempts: 3,
       token: "[redacted]",
-      preview: `${"x".repeat(240)}...[60 chars omitted]`,
+      preview: `${"x".repeat(240)}...[omitted: 60 chars]`,
       operation: "sync",
       outcome: "failure",
     });

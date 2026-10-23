@@ -136,10 +136,10 @@ function summarizeValue(
     return summarizeString(value, options.maxStringLength);
   }
   if (depth >= options.maxDepth) {
-    return "[max depth reached]";
+    return "[omitted: max depth]";
   }
   if (seen.has(value)) {
-    return "[circular]";
+    return "[omitted: circular]";
   }
   const nextSeen = new Set(seen).add(value);
   return Array.isArray(value)
@@ -157,7 +157,7 @@ function summarizeString(value: string, maxLength: number): string {
     return value;
   }
   const omitted = value.length - maxLength;
-  return `${value.slice(0, maxLength)}...[${omitted} chars omitted]`;
+  return `${value.slice(0, maxLength)}...[omitted: ${omitted} chars]`;
 }
 
 function summarizeArray(
@@ -171,7 +171,7 @@ function summarizeArray(
     .map((item) => summarizeValue(item, options, depth + 1, seen));
   const omittedCount = value.length - options.maxArrayItems;
   if (omittedCount > 0) {
-    items.push(`[${omittedCount} more items omitted]`);
+    items.push(`[omitted: ${omittedCount} items]`);
   }
   return items;
 }
@@ -206,7 +206,7 @@ function summarizeObject(
   }
   const omittedCount = keys.length - options.maxObjectKeys;
   if (omittedCount > 0) {
-    summary[`[${omittedCount} more keys omitted]`] = true;
+    summary[`[omitted: ${omittedCount} keys]`] = true;
   }
   return summary;
 }

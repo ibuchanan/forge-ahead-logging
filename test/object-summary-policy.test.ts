@@ -455,7 +455,7 @@ describe("summarizeObjectForLog field transforms", () => {
 
     const result = summarizeObjectForLog({ note: longNote }, policy);
 
-    expect(result["note"]).toBe(`${"x".repeat(240)}...[60 chars omitted]`);
+    expect(result["note"]).toBe(`${"x".repeat(240)}...[omitted: 60 chars]`);
   });
 
   it("resolves nested paths via dot-string or array path", () => {
