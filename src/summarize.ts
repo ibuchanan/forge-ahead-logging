@@ -105,7 +105,7 @@ function summarizeSpecialType(value: unknown): string | null {
   return null;
 }
 
-export function summarizeValue(
+function summarizeValue(
   value: unknown,
   options: Required<LogValueSummaryOptions>,
   depth: number,

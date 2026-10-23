@@ -1,8 +1,8 @@
 import { DEFAULT_REDACTION_CENSOR, isSecretShapedKey } from "./redaction.js";
-import type { JSONValue, LogValueSummaryOptions } from "./summarize.js";
 import {
-  DEFAULT_LOG_VALUE_SUMMARY_OPTIONS,
-  summarizeValue,
+  type JSONValue,
+  type LogValueSummaryOptions,
+  summarizeForLog,
 } from "./summarize.js";
 
 export type LogFieldPath = string | readonly string[];
@@ -199,7 +199,7 @@ function omittedShapeOf(value: unknown): JSONValue {
 function applyFieldTransform(
   transform: LogFieldTransform,
   value: unknown,
-  options: Required<LogValueSummaryOptions>,
+  options: LogValueSummaryOptions | undefined,
 ): JSONValue {
   switch (transform) {
     case "redact":
@@ -207,14 +207,14 @@ function applyFieldTransform(
     case "omittedShape":
       return omittedShapeOf(value);
     default:
-      return summarizeValue(value, options, 0, new Set());
+      return summarizeForLog(value, options);
   }
 }
 
 function summarizeFieldMap(
   value: unknown,
   fields: LogFieldMap,
-  options: Required<LogValueSummaryOptions>,
+  options: LogValueSummaryOptions | undefined,
 ): Record<string, unknown> {
   const result: Record<string, unknown> = {};
   for (const [alias, selection] of Object.entries(fields)) {
@@ -233,18 +233,14 @@ export function summarizeObjectForLog(
   policy: LogObjectSummaryPolicy,
   options?: LogObjectSummaryOptions,
 ): Record<string, unknown> {
-  const resolvedOptions: Required<LogValueSummaryOptions> = {
-    ...DEFAULT_LOG_VALUE_SUMMARY_OPTIONS,
-    ...options,
-  };
   const includeLabels = options?.includeLabels === true;
   const labels =
     includeLabels && policy.labels
-      ? summarizeFieldMap(value, policy.labels, resolvedOptions)
+      ? summarizeFieldMap(value, policy.labels, options)
       : {};
   return {
     kind: policy.kind,
-    ...summarizeFieldMap(value, policy.fields, resolvedOptions),
+    ...summarizeFieldMap(value, policy.fields, options),
     ...labels,
   };
 }
