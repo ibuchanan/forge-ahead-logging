@@ -4,16 +4,6 @@ import type { LogObjectSummaryPolicy } from "./policy.js";
 import { summarizeObjectForLog } from "./policy.js";
 import type { LogLevelMethods } from "./types.js";
 
-function approvedProblemFields(
-  problemDetails: ProblemDetails,
-): Record<string, unknown> {
-  return {
-    type: problemDetails.type,
-    status: problemDetails.status,
-    outcome: "failure",
-  };
-}
-
 const MAX_CAUSE_DEPTH = 3;
 const MAX_AGGREGATE_ERRORS = 3;
 
@@ -22,10 +12,10 @@ function buildErrorMetadataSummary(
   status?: number,
 ): Record<string, unknown> {
   if (isProblemDetails(error)) {
-    return approvedProblemFields(error);
+    return { type: error.type, status: error.status, outcome: "failure" };
   }
   if (isDomainError(error)) {
-    return buildDomainErrorMetadata(error);
+    return { errorCode: error.code, outcome: "failure" };
   }
   const metadata: Record<string, unknown> = { outcome: "failure" };
   if (error instanceof Error) {
@@ -37,21 +27,13 @@ function buildErrorMetadataSummary(
   return metadata;
 }
 
-function isDomainError(
-  error: unknown,
-): error is { code: string } & Record<string, unknown> {
+function isDomainError(error: unknown): error is { code: string } {
   return (
     typeof error === "object" &&
     error !== null &&
     "code" in error &&
     typeof (error as { code: unknown }).code === "string"
   );
-}
-
-function buildDomainErrorMetadata(
-  error: { code: string } & Record<string, unknown>,
-): Record<string, unknown> {
-  return { errorCode: error.code, outcome: "failure" };
 }
 
 /** Per-call-site error summarizing choices shared by every error-logging option type. */
@@ -70,23 +52,18 @@ function causeOf(error: unknown): unknown {
 
 function buildErrorCauses(error: unknown): Record<string, unknown> {
   const result: Record<string, unknown> = {};
-  const cause = causeOf(error);
-  if (cause !== undefined && cause !== null) {
-    const visited = new Set<unknown>();
-    const causes: unknown[] = [];
-    let current: unknown = cause;
-    while (
-      causes.length < MAX_CAUSE_DEPTH &&
-      current !== undefined &&
-      current !== null
-    ) {
-      if (visited.has(current)) {
-        break;
-      }
-      visited.add(current);
-      causes.push(buildErrorMetadataSummary(current));
-      current = (current as Error).cause;
-    }
+  // The root is not pre-seeded, so a chain that loops back to it reports it once.
+  const seen = new Set<unknown>();
+  const causes: Record<string, unknown>[] = [];
+  for (
+    let cause = causeOf(error);
+    cause != null && !seen.has(cause) && causes.length < MAX_CAUSE_DEPTH;
+    cause = causeOf(cause)
+  ) {
+    seen.add(cause);
+    causes.push(buildErrorMetadataSummary(cause));
+  }
+  if (causes.length > 0) {
     result["causes"] = causes;
   }
   if (error instanceof AggregateError) {
