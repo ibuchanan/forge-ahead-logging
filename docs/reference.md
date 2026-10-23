@@ -80,7 +80,25 @@ Produces a bounded, JSON-safe, value-bearing representation. Summary options con
 
 ### `withDefaultRedaction(redact?)`
 
-Returns Pino redaction options containing the package’s default secret-shaped paths. The default censor is `[redacted]`.
+Returns Pino redaction options containing the package’s default secret-shaped paths. Caller paths are additive and retain Pino's explicit-path/wildcard syntax; a path such as `custom` does not match every nested key named `custom`. `remove` and caller `censor` options do not replace the fixed `[redacted]` censor. This helper alone does not install recursive enforcement on arbitrary Pino loggers.
+
+### Default Redaction Backstop
+
+`ForgeLogger` recursively censors recognized secret-shaped keys (case-insensitive authorization, cookie/set-cookie, token/accessToken/refreshToken/contextToken/jwt, password, apiKey/api_key, secret/clientSecret/client_secret) before record serialization. The backstop covers ordinary/lazy structured arguments, ambient context, base/child bindings, and already-summarized record metadata. Operational siblings remain intact within the limits below. Console arguments remain structural, not value-bearing; console enrichment receives the same backstop. Base and child bindings are sanitized before Pino pre-serializes them, so inherited binding copies contain no original recognized secret values.
+
+| Boundary | Behavior |
+| --- | --- |
+| Container depth | At most 32 levels, including the record root; each evaluated `toJSON` result consumes an additional level. |
+| Traversal | At most 10,000 object properties plus array slots per sanitized record/snapshot; source merging separately accepts at most 10,000 own enumerable properties, including overwritten ones. |
+| Structured text | At most 1,000,000 UTF-16 code units across visited property names and retained string values; not an exact encoded-byte limit. |
+| Limit exceeded | Entire structured record/snapshot replaced with `{ logRecordOmitted: "redaction limit reached" }`; no unchecked subtree returned. Normal level/time and separately supplied message remain. |
+| Inspection/serialization failure during redaction | Entire structured record/snapshot replaced with `{ logRecordOmitted: "redaction unavailable" }`; no exception text copied. |
+
+Traversal creates fresh objects/arrays and does not modify caller-owned values, including frozen values and repeated aliases. Object traversal uses own enumerable string keys; arrays retain indexed values and holes serialize as `null`. Date and custom nested `toJSON(key)` results are sanitized before Pino sees them; getters for non-secret fields are evaluated, while recognized secret-field getters are not. Custom getters/`toJSON` can run application code and are not sandboxed or time-bounded. Their side effects are the application's responsibility. Boxed strings/numbers/booleans retain their JSON primitive representation. Functions/symbols/undefined retain normal JSON omission/null behavior; cycles use `[Circular]`. Raw Error objects still are not automatic error projections; use `logError` for the supported error contract. Existing summary/metadata bounds remain in place before the backstop. Disabled records skip traversal and lazy metadata; base/child snapshots are sanitized when constructed regardless of current level.
+
+**Compatibility:** deep recognized fields now become `[redacted]`; oversized or uninspectable structured records are omitted rather than partially copied. Custom Pino paths run after recursive sanitation, including against sanitized `toJSON` results. No new option or dependency is required.
+
+**Privacy boundary:** this is a secondary defense, not a comprehensive privacy guarantee. Free-form messages, interpolated strings, personal data under unrecognized field names, input property names themselves, and direct underlying-Pino use via `unwrapPinoLogger` are not covered. Custom Pino serializers/hooks or bindings installed through that escape hatch are outside this contract. Allow-list application projections remain the primary defense.
 
 ### `defineLogObjectSummaryPolicy(policy)`
 

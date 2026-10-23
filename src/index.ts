@@ -1112,9 +1112,6 @@ function resolveLogCall(
 ): { obj: Record<string, unknown>; message?: string } {
   let resolved: Record<string, unknown> | string;
   if (typeof obj === "function") {
-    if (!pinoLogger.isLevelEnabled(level)) {
-      return { obj: {} };
-    }
     resolved = obj();
   } else {
     resolved = obj;
@@ -1123,15 +1120,121 @@ function resolveLogCall(
   const ambient = getLogContext();
   const base = pinoLogger.bindings();
   const recordMetadata = buildRecordMetadata(pinoLogger, level);
-  if (typeof resolved === "string") {
+  return {
+    obj: redactLogRecord(
+      base,
+      recordMetadata,
+      ambient,
+      typeof resolved === "string" ? {} : resolved,
+    ),
+    message: typeof resolved === "string" ? resolved : undefined,
+  };
+}
+
+const MAX_REDACTION_DEPTH = 32;
+const MAX_REDACTION_ENTRIES = 10_000;
+const MAX_REDACTION_CHARACTERS = 1_000_000;
+const REDACTION_LIMIT = Symbol("redaction limit");
+
+function redactLogRecord(
+  ...sources: Record<string, unknown>[]
+): Record<string, unknown> {
+  try {
+    const merged = {};
+    let entries = 0;
+    // Merge descriptors so overridden getters are not evaluated before the backstop.
+    for (const source of sources) {
+      for (const key in source) {
+        if (!Object.hasOwn(source, key)) continue;
+        if (++entries > MAX_REDACTION_ENTRIES) throw REDACTION_LIMIT;
+        Object.defineProperty(merged, key, {
+          ...Object.getOwnPropertyDescriptor(source, key),
+          configurable: true,
+        });
+      }
+    }
+    return redactRecordValue(merged, {
+      entries: MAX_REDACTION_ENTRIES,
+      characters: MAX_REDACTION_CHARACTERS,
+    }) as Record<string, unknown>;
+  } catch (error) {
     return {
-      obj: { ...base, ...recordMetadata, ...ambient },
-      message: resolved,
+      logRecordOmitted:
+        error === REDACTION_LIMIT
+          ? "redaction limit reached"
+          : "redaction unavailable",
     };
   }
-  return {
-    obj: { ...base, ...recordMetadata, ...ambient, ...resolved },
-  };
+}
+
+function redactRecordValue(
+  value: unknown,
+  budget: { entries: number; characters: number },
+  seen = new Set<object>(),
+  depth = 0,
+  key = "",
+  applyToJSON = false,
+): unknown {
+  if (typeof value === "string") {
+    budget.characters -= value.length;
+    if (budget.characters < 0) throw REDACTION_LIMIT;
+  }
+  if (typeof value === "function") return undefined;
+  if (value === null || typeof value !== "object") return value;
+  if (seen.has(value)) return "[Circular]";
+  if (depth >= MAX_REDACTION_DEPTH) throw REDACTION_LIMIT;
+  if (applyToJSON && "toJSON" in value && typeof value.toJSON === "function") {
+    return redactRecordValue(value.toJSON(key), budget, seen, depth + 1, key);
+  }
+  if (
+    value instanceof String ||
+    value instanceof Number ||
+    value instanceof Boolean
+  ) {
+    return redactRecordValue(value.valueOf(), budget, seen, depth, key);
+  }
+  seen.add(value);
+  if (Array.isArray(value)) {
+    budget.entries -= value.length;
+    if (budget.entries < 0) throw REDACTION_LIMIT;
+    const result = Array.from({ length: value.length }, (_, index) =>
+      redactRecordValue(
+        value[index],
+        budget,
+        seen,
+        depth + 1,
+        String(index),
+        true,
+      ),
+    );
+    seen.delete(value);
+    return result;
+  }
+  const result: Record<string, unknown> = {};
+  for (const key in value) {
+    if (!Object.hasOwn(value, key)) continue;
+    if (--budget.entries < 0) throw REDACTION_LIMIT;
+    budget.characters -= key.length;
+    if (budget.characters < 0) throw REDACTION_LIMIT;
+    const entry = isSecretShapedKey(key, [])
+      ? DEFAULT_REDACTION_CENSOR
+      : redactRecordValue(
+          (value as Record<string, unknown>)[key],
+          budget,
+          seen,
+          depth + 1,
+          key,
+          true,
+        );
+    Object.defineProperty(result, key, {
+      value: entry,
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
+  }
+  seen.delete(value);
+  return result;
 }
 
 function logWithLevel(
@@ -1141,12 +1244,14 @@ function logWithLevel(
   message: string | undefined,
   args: unknown[],
 ): void {
+  if (!pinoLogger.isLevelEnabled(level)) return;
   const resolved = resolveLogCall(obj, level, pinoLogger);
+  const record = resolved.obj;
   if (typeof obj === "string") {
-    pinoLogger[level](resolved.obj, obj, message, ...args);
+    pinoLogger[level](record, obj, message, ...args);
     return;
   }
-  pinoLogger[level](resolved.obj, message ?? resolved.message, ...args);
+  pinoLogger[level](record, message ?? resolved.message, ...args);
 }
 
 function wrapPinoLogger(pinoLogger: pino.Logger): ForgeLogger {
@@ -1171,7 +1276,7 @@ function wrapPinoLogger(pinoLogger: pino.Logger): ForgeLogger {
     },
     isLevelEnabled: (level) => pinoLogger.isLevelEnabled(level),
     child: (bindings) => {
-      const childPinoLogger = pinoLogger.child(bindings);
+      const childPinoLogger = pinoLogger.child(redactLogRecord(bindings));
       const childRecordMetadata = recordMetadataByPinoLogger.get(pinoLogger);
       if (childRecordMetadata) {
         recordMetadataByPinoLogger.set(childPinoLogger, childRecordMetadata);
@@ -1393,6 +1498,7 @@ export function installConsoleCapture(logger: ForgeLogger): () => void {
     if (isLoggerWritingToConsole) {
       return previous.log(...args);
     }
+    if (!logger.isLevelEnabled("info")) return;
     const { obj, message } = formatConsoleArgs("log", args);
     logger.info(obj, message);
   };
@@ -1400,6 +1506,7 @@ export function installConsoleCapture(logger: ForgeLogger): () => void {
     if (isLoggerWritingToConsole) {
       return previous.info(...args);
     }
+    if (!logger.isLevelEnabled("info")) return;
     const { obj, message } = formatConsoleArgs("info", args);
     logger.info(obj, message);
   };
@@ -1407,6 +1514,7 @@ export function installConsoleCapture(logger: ForgeLogger): () => void {
     if (isLoggerWritingToConsole) {
       return previous.warn(...args);
     }
+    if (!logger.isLevelEnabled("warn")) return;
     const { obj, message } = formatConsoleArgs("warn", args);
     logger.warn(obj, message);
   };
@@ -1414,6 +1522,7 @@ export function installConsoleCapture(logger: ForgeLogger): () => void {
     if (isLoggerWritingToConsole) {
       return previous.error(...args);
     }
+    if (!logger.isLevelEnabled("error")) return;
     const { obj, message } = formatConsoleArgs("error", args);
     logger.error(obj, message);
   };
@@ -1421,6 +1530,7 @@ export function installConsoleCapture(logger: ForgeLogger): () => void {
     if (isLoggerWritingToConsole) {
       return previous.debug(...args);
     }
+    if (!logger.isLevelEnabled("debug")) return;
     const { obj, message } = formatConsoleArgs("debug", args);
     logger.debug(obj, message);
   };
@@ -1449,7 +1559,7 @@ export function createForgeLogger(
     {
       level,
       name: options.name,
-      base: options.base ?? {},
+      base: redactLogRecord(options.base ?? {}),
       redact: withDefaultRedaction(options.redact),
       timestamp: resolveTimestamp(options),
       formatters: {
