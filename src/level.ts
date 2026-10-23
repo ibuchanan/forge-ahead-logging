@@ -57,21 +57,17 @@ function parseLogLevels(
   return { level, invalidValue };
 }
 
-export function resolveLogLevel(): ResolvedForgeLogLevel;
+export interface LogLevelOptions {
+  /** Logger name that selects a `name=level` override. */
+  name?: string | undefined;
+  /** Environment to read. Defaults to `process.env`. */
+  env?: Record<string, string | undefined> | undefined;
+}
+
 export function resolveLogLevel(
-  env: Record<string, string | undefined>,
-): ResolvedForgeLogLevel;
-export function resolveLogLevel(
-  name: string | undefined,
-  env?: Record<string, string | undefined>,
-): ResolvedForgeLogLevel;
-export function resolveLogLevel(
-  nameOrEnv?: string | Record<string, string | undefined>,
-  maybeEnv?: Record<string, string | undefined>,
+  options: LogLevelOptions = {},
 ): ResolvedForgeLogLevel {
-  const name = typeof nameOrEnv === "string" ? nameOrEnv : undefined;
-  const env =
-    typeof nameOrEnv === "object" ? nameOrEnv : (maybeEnv ?? process.env);
+  const { name, env = process.env } = options;
   const { level, invalidValue } = parseLogLevels(env["LOG_LEVEL"] ?? "", name);
   if (level !== undefined) {
     return {
@@ -88,8 +84,6 @@ export function resolveLogLevel(
     : { level: "info", source: "default" };
 }
 
-export function getLogLevel(
-  env: Record<string, string | undefined> = process.env,
-): ForgeLogLevel {
-  return resolveLogLevel(env).level;
+export function getLogLevel(options: LogLevelOptions = {}): ForgeLogLevel {
+  return resolveLogLevel(options).level;
 }

@@ -24,7 +24,7 @@ This page is a lookup reference for the package’s public APIs and operational 
 | `trace`  |       10 |
 | `silent` | Disabled |
 
-`resolveLogLevel(name?, env?)` returns the selected level, its source, and invalid configuration metadata without emitting a record. `getLogLevel(...)` returns the effective level.
+`resolveLogLevel({ name?, env? })` returns the selected level, its source, and invalid configuration metadata without emitting a record. `getLogLevel({ name?, env? })` returns the effective level. `name` selects a `name=level` override, and `env` defaults to `process.env`.
 
 Resolution precedence:
 1. a valid `LOG_LEVEL` value;

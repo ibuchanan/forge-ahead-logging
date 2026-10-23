@@ -1,28 +1,31 @@
 import fc from "fast-check";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { getLogLevel, resolveLogLevel } from "../src/index";
 
 describe("resolveLogLevel", () => {
   it("defaults to info when LOG_LEVEL and NODE_ENV are absent", () => {
-    expect(resolveLogLevel({})).toEqual({ level: "info", source: "default" });
+    expect(resolveLogLevel({ env: {} })).toEqual({
+      level: "info",
+      source: "default",
+    });
   });
 
   it("uses a valid LOG_LEVEL value", () => {
-    expect(resolveLogLevel({ LOG_LEVEL: "debug" })).toEqual({
+    expect(resolveLogLevel({ env: { LOG_LEVEL: "debug" } })).toEqual({
       level: "debug",
       source: "LOG_LEVEL",
     });
   });
 
   it("falls back to debug in development when LOG_LEVEL is absent", () => {
-    expect(resolveLogLevel({ NODE_ENV: "development" })).toEqual({
+    expect(resolveLogLevel({ env: { NODE_ENV: "development" } })).toEqual({
       level: "debug",
       source: "NODE_ENV",
     });
   });
 
   it("falls back to info and reports the invalid value for an invalid LOG_LEVEL", () => {
-    expect(resolveLogLevel({ LOG_LEVEL: "verbose" })).toEqual({
+    expect(resolveLogLevel({ env: { LOG_LEVEL: "verbose" } })).toEqual({
       level: "info",
       source: "default",
       invalidValue: "verbose",
@@ -31,7 +34,10 @@ describe("resolveLogLevel", () => {
 
   it("applies a per-name override", () => {
     expect(
-      resolveLogLevel("my-lib", { LOG_LEVEL: "info,my-lib=debug" }),
+      resolveLogLevel({
+        name: "my-lib",
+        env: { LOG_LEVEL: "info,my-lib=debug" },
+      }),
     ).toEqual({
       level: "debug",
       source: "LOG_LEVEL",
@@ -40,7 +46,10 @@ describe("resolveLogLevel", () => {
 
   it("uses the global level when no override matches the name", () => {
     expect(
-      resolveLogLevel("other-lib", { LOG_LEVEL: "info,my-lib=debug" }),
+      resolveLogLevel({
+        name: "other-lib",
+        env: { LOG_LEVEL: "info,my-lib=debug" },
+      }),
     ).toEqual({
       level: "info",
       source: "LOG_LEVEL",
@@ -49,7 +58,10 @@ describe("resolveLogLevel", () => {
 
   it("treats the first segment as global level even when it contains an override", () => {
     expect(
-      resolveLogLevel("my-lib", { LOG_LEVEL: "warn,my-lib=debug" }),
+      resolveLogLevel({
+        name: "my-lib",
+        env: { LOG_LEVEL: "warn,my-lib=debug" },
+      }),
     ).toEqual({
       level: "debug",
       source: "LOG_LEVEL",
@@ -58,7 +70,10 @@ describe("resolveLogLevel", () => {
 
   it("reports an invalid override segment without causing a fatal error", () => {
     expect(
-      resolveLogLevel("my-lib", { LOG_LEVEL: "info,my-lib=verbose" }),
+      resolveLogLevel({
+        name: "my-lib",
+        env: { LOG_LEVEL: "info,my-lib=verbose" },
+      }),
     ).toEqual({
       level: "info",
       source: "LOG_LEVEL",
@@ -67,7 +82,9 @@ describe("resolveLogLevel", () => {
   });
 
   it("falls back to default when no global level and no override matches", () => {
-    expect(resolveLogLevel("other", { LOG_LEVEL: "my-lib=debug" })).toEqual({
+    expect(
+      resolveLogLevel({ name: "other", env: { LOG_LEVEL: "my-lib=debug" } }),
+    ).toEqual({
       level: "info",
       source: "default",
     });
@@ -75,9 +92,9 @@ describe("resolveLogLevel", () => {
 
   it("falls back to NODE_ENV when no global level and no override matches", () => {
     expect(
-      resolveLogLevel("other", {
-        LOG_LEVEL: "my-lib=debug",
-        NODE_ENV: "development",
+      resolveLogLevel({
+        name: "other",
+        env: { LOG_LEVEL: "my-lib=debug", NODE_ENV: "development" },
       }),
     ).toEqual({
       level: "debug",
@@ -104,7 +121,7 @@ describe("resolveLogLevel properties", () => {
         fc.option(loggerName, { nil: undefined }),
         fc.string(),
         (name, raw) => {
-          const resolved = resolveLogLevel(name, { LOG_LEVEL: raw });
+          const resolved = resolveLogLevel({ name, env: { LOG_LEVEL: raw } });
           expect([
             "fatal",
             "error",
@@ -122,7 +139,7 @@ describe("resolveLogLevel properties", () => {
     fc.assert(
       fc.property(level, fc.constantFrom("", " ", "  "), (expected, pad) => {
         expect(
-          resolveLogLevel({ LOG_LEVEL: `${pad}${expected}${pad}` }),
+          resolveLogLevel({ env: { LOG_LEVEL: `${pad}${expected}${pad}` } }),
         ).toEqual({
           level: expected,
           source: "LOG_LEVEL",
@@ -141,8 +158,8 @@ describe("resolveLogLevel properties", () => {
         (global, override, target, other) => {
           fc.pre(target !== other);
           const env = { LOG_LEVEL: `${global},${target}=${override}` };
-          expect(resolveLogLevel(target, env).level).toBe(override);
-          expect(resolveLogLevel(other, env).level).toBe(global);
+          expect(resolveLogLevel({ name: target, env }).level).toBe(override);
+          expect(resolveLogLevel({ name: other, env }).level).toBe(global);
         },
       ),
     );
@@ -153,7 +170,7 @@ describe("resolveLogLevel properties", () => {
       fc.property(fc.string({ maxLength: 12 }), level, (bad, valid) => {
         fc.pre(bad.trim() !== "");
         const raw = `${valid},${bad}`;
-        const { invalidValue } = resolveLogLevel({ LOG_LEVEL: raw });
+        const { invalidValue } = resolveLogLevel({ env: { LOG_LEVEL: raw } });
         if (invalidValue !== undefined) {
           expect(raw.split(",").map((s) => s.trim())).toContain(invalidValue);
         }
@@ -163,7 +180,24 @@ describe("resolveLogLevel properties", () => {
 });
 
 describe("getLogLevel", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
   it("returns only the resolved level", () => {
-    expect(getLogLevel({ LOG_LEVEL: "warn" })).toBe("warn");
+    expect(getLogLevel({ env: { LOG_LEVEL: "warn" } })).toBe("warn");
+  });
+
+  it("applies a per-name override like resolveLogLevel", () => {
+    const env = { LOG_LEVEL: "info,my-lib=trace" };
+
+    expect(getLogLevel({ name: "my-lib", env })).toBe("trace");
+    expect(getLogLevel({ name: "other", env })).toBe("info");
+  });
+
+  it("reads process.env when no environment is given", () => {
+    vi.stubEnv("LOG_LEVEL", "info,my-lib=error");
+
+    expect(getLogLevel()).toBe("info");
+    expect(getLogLevel({ name: "my-lib" })).toBe("error");
+    expect(resolveLogLevel({ name: "my-lib" }).level).toBe("error");
   });
 });

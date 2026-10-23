@@ -291,6 +291,20 @@ these fields:
 | Object | `{ omitted: true, keys: 2 }`    | `{ type: "object", keys: 2 }`                       |
 | Other  | `{ omitted: true }`             | `{ type: "number" }`, `{ type: "null" }`, and so on |
 
+## Migrate `resolveLogLevel` and `getLogLevel` arguments (breaking change)
+
+`resolveLogLevel` and `getLogLevel` now take one options object,
+`{ name?, env? }`, instead of positional `name` and `env` arguments. Calls
+with no arguments are unchanged. `getLogLevel` also accepts `name` now, so it
+can resolve a per-name override.
+
+| Before                       | After                            |
+| ---------------------------- | -------------------------------- |
+| `resolveLogLevel(env)`       | `resolveLogLevel({ env })`       |
+| `resolveLogLevel(name)`      | `resolveLogLevel({ name })`      |
+| `resolveLogLevel(name, env)` | `resolveLogLevel({ name, env })` |
+| `getLogLevel(env)`           | `getLogLevel({ env })`           |
+
 ## Capture third-party console output temporarily
 
 Install capture around a dependency or migration path:

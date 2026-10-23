@@ -119,8 +119,7 @@ describe("FORGE_LOG_EVENT_SHAPE", () => {
 describe("resolveLogLevel", () => {
   it("does not report diagnostic toggles as level sources", () => {
     const result = resolveLogLevel({
-      FORGE_LOG_LABELS: "true",
-      FORGE_LOG_EVENT_SHAPE: "true",
+      env: { FORGE_LOG_LABELS: "true", FORGE_LOG_EVENT_SHAPE: "true" },
     });
 
     expect(result.level).toBe("info");

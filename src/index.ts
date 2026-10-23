@@ -19,6 +19,7 @@ export {
   type ForgeLogLevel,
   type ForgeLogLevelSource,
   getLogLevel,
+  type LogLevelOptions,
   type ResolvedForgeLogLevel,
   resolveLogLevel,
 } from "./level.js";
