@@ -12,8 +12,8 @@ export type DebugProbeLevel = "debug" | "trace";
 /** Probe diagnostics are structural unless an application explicitly selects values. */
 export interface LogProbeOptions extends ErrorPolicyOption {
   level?: DebugProbeLevel;
-  /** Structural by default; lazy callbacks run only when the requested level is enabled. */
-  metadata?: unknown | (() => unknown);
+  /** Structural by default. A function is called lazily, only when the requested level is enabled. */
+  metadata?: unknown;
   /** Reviewed value projection replacing the structural successful-value summary. */
   valuePolicy?: LogObjectSummaryPolicy;
   /** Reviewed projection replacing structural probe-only metadata. */
@@ -28,7 +28,7 @@ function resolveProbeMetadata(
   }
   const metadata =
     typeof options.metadata === "function"
-      ? (options.metadata as () => unknown)()
+      ? options.metadata()
       : options.metadata;
   return options.metadataPolicy
     ? summarizeObjectForLog(metadata, options.metadataPolicy)
@@ -62,32 +62,6 @@ function emitProbe(
   }
 }
 
-function logProbeSuccess(
-  logger: LogLevelMethods,
-  label: string,
-  value: unknown,
-  level: DebugProbeLevel,
-  options: LogProbeOptions | undefined,
-): void {
-  emitProbe(logger, level, label, options, () => ({
-    value: options?.valuePolicy
-      ? summarizeObjectForLog(value, options.valuePolicy)
-      : summarizeShapeForLog(value),
-  }));
-}
-
-function logProbeError(
-  logger: LogLevelMethods,
-  label: string,
-  error: unknown,
-  level: DebugProbeLevel,
-  options: LogProbeOptions | undefined,
-): void {
-  emitProbe(logger, level, label, options, () => ({
-    error: buildErrorMetadata(error, options),
-  }));
-}
-
 export function logProbe<T>(
   logger: LogLevelMethods,
   label: string,
@@ -95,6 +69,17 @@ export function logProbe<T>(
   options?: LogProbeOptions,
 ): T {
   const level = options?.level ?? "debug";
+  const emit = (summarize: () => Record<string, unknown>): void =>
+    emitProbe(logger, level, label, options, summarize);
+  const logSuccess = (value: unknown): void =>
+    emit(() => ({
+      value: options?.valuePolicy
+        ? summarizeObjectForLog(value, options.valuePolicy)
+        : summarizeShapeForLog(value),
+    }));
+  const logFailure = (error: unknown): void =>
+    emit(() => ({ error: buildErrorMetadata(error, options) }));
+
   let result: T;
   try {
     result =
@@ -102,21 +87,21 @@ export function logProbe<T>(
         ? (valueOrThunk as () => T)()
         : valueOrThunk;
   } catch (thrown) {
-    logProbeError(logger, label, thrown, level, options);
+    logFailure(thrown);
     throw thrown;
   }
   if (isPromiseLike(result)) {
     return result.then(
       (fulfilled) => {
-        logProbeSuccess(logger, label, fulfilled, level, options);
+        logSuccess(fulfilled);
         return fulfilled;
       },
       (rejected) => {
-        logProbeError(logger, label, rejected, level, options);
+        logFailure(rejected);
         throw rejected;
       },
     ) as T;
   }
-  logProbeSuccess(logger, label, result, level, options);
+  logSuccess(result);
   return result;
 }
