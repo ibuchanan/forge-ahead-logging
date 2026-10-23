@@ -16,3 +16,20 @@ export function expectNoneEscaped(
     }
   }
 }
+
+/** Runs one assertion body per log level, naming the level in any failure. */
+export async function atEachLevel<L extends string>(
+  levels: readonly L[],
+  body: (level: L) => void | Promise<void>,
+): Promise<void> {
+  for (const level of levels) {
+    try {
+      await body(level);
+    } catch (error) {
+      if (error instanceof Error) {
+        error.message = `[LOG_LEVEL=${level}] ${error.message}`;
+      }
+      throw error;
+    }
+  }
+}
