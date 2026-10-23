@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { assert, describe, expect, it, vi } from "vitest";
 import { createForgeLogger, unwrapPinoLogger } from "../src/index";
 import { createCapturingLogger } from "../src/testing";
 
@@ -8,10 +8,11 @@ describe("createForgeLogger", () => {
 
     logger.info({ foo: "bar" }, "hello");
 
-    const [record] = records;
-    expect(record.msg).toBe("hello");
-    expect(record.foo).toBe("bar");
-    expect(record.level).toBe("info");
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["msg"]).toBe("hello");
+    expect(record["foo"]).toBe("bar");
+    expect(record["level"]).toBe("info");
   });
 
   it("suppresses debug records at the default info level", () => {
@@ -29,9 +30,10 @@ describe("createForgeLogger", () => {
 
     logger.debug({}, "now it appears");
 
-    const [record] = records;
-    expect(record.msg).toBe("now it appears");
-    expect(record.level).toBe("debug");
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["msg"]).toBe("now it appears");
+    expect(record["level"]).toBe("debug");
   });
 
   it("includes the logger name when supplied", () => {
@@ -39,8 +41,9 @@ describe("createForgeLogger", () => {
 
     logger.info({}, "hello");
 
-    const [record] = records;
-    expect(record.name).toBe("my-service");
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["name"]).toBe("my-service");
   });
 
   it("suppresses default pino base fields unless base is supplied", () => {
@@ -48,9 +51,10 @@ describe("createForgeLogger", () => {
 
     logger.info({}, "hello");
 
-    const [record] = records;
-    expect(record.pid).toBeUndefined();
-    expect(record.hostname).toBeUndefined();
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["pid"]).toBeUndefined();
+    expect(record["hostname"]).toBeUndefined();
   });
 
   it("includes caller-supplied base fields", () => {
@@ -60,8 +64,9 @@ describe("createForgeLogger", () => {
 
     logger.info({}, "hello");
 
-    const [record] = records;
-    expect(record.region).toBe("us-east-1");
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["region"]).toBe("us-east-1");
   });
 
   it("passes child bindings through to emitted records", () => {
@@ -70,8 +75,9 @@ describe("createForgeLogger", () => {
 
     child.info({}, "hello from child");
 
-    const [record] = records;
-    expect(record.requestId).toBe("req-123");
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["requestId"]).toBe("req-123");
   });
 
   it("applies per-name LOG_LEVEL overrides to the named logger", () => {
@@ -82,9 +88,10 @@ describe("createForgeLogger", () => {
 
     logger.debug({}, "debug for my-lib");
 
-    const [record] = records;
-    expect(record.msg).toBe("debug for my-lib");
-    expect(record.level).toBe("debug");
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["msg"]).toBe("debug for my-lib");
+    expect(record["level"]).toBe("debug");
   });
 
   it("lets child loggers inherit a per-name LOG_LEVEL override", () => {
@@ -96,9 +103,10 @@ describe("createForgeLogger", () => {
 
     child.debug({}, "debug from child");
 
-    const [record] = records;
-    expect(record.msg).toBe("debug from child");
-    expect(record.level).toBe("debug");
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["msg"]).toBe("debug from child");
+    expect(record["level"]).toBe("debug");
   });
 
   it("accepts a message-only call equivalent to an empty metadata object", () => {
@@ -106,9 +114,10 @@ describe("createForgeLogger", () => {
 
     logger.info("hello");
 
-    const [record] = records;
-    expect(record.msg).toBe("hello");
-    expect(record.level).toBe("info");
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["msg"]).toBe("hello");
+    expect(record["level"]).toBe("info");
   });
 
   it("keeps the explicit message when metadata also contains a msg key", () => {
@@ -116,9 +125,10 @@ describe("createForgeLogger", () => {
 
     logger.info({ msg: "from object", foo: "bar" }, "from argument");
 
-    const [record] = records;
-    expect(record.msg).toBe("from argument");
-    expect(record.foo).toBe("bar");
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["msg"]).toBe("from argument");
+    expect(record["foo"]).toBe("bar");
   });
 
   it("supports message-only calls on all seven level methods", () => {
@@ -134,18 +144,30 @@ describe("createForgeLogger", () => {
     logger.trace("trace msg");
 
     expect(records).toHaveLength(6);
-    expect(records[0].msg).toBe("fatal msg");
-    expect(records[0].level).toBe("fatal");
-    expect(records[1].msg).toBe("error msg");
-    expect(records[1].level).toBe("error");
-    expect(records[2].msg).toBe("warn msg");
-    expect(records[2].level).toBe("warn");
-    expect(records[3].msg).toBe("info msg");
-    expect(records[3].level).toBe("info");
-    expect(records[4].msg).toBe("debug msg");
-    expect(records[4].level).toBe("debug");
-    expect(records[5].msg).toBe("trace msg");
-    expect(records[5].level).toBe("trace");
+    assert.isDefined(records[0]);
+    expect(records[0]["msg"]).toBe("fatal msg");
+    assert.isDefined(records[0]);
+    expect(records[0]["level"]).toBe("fatal");
+    assert.isDefined(records[1]);
+    expect(records[1]["msg"]).toBe("error msg");
+    assert.isDefined(records[1]);
+    expect(records[1]["level"]).toBe("error");
+    assert.isDefined(records[2]);
+    expect(records[2]["msg"]).toBe("warn msg");
+    assert.isDefined(records[2]);
+    expect(records[2]["level"]).toBe("warn");
+    assert.isDefined(records[3]);
+    expect(records[3]["msg"]).toBe("info msg");
+    assert.isDefined(records[3]);
+    expect(records[3]["level"]).toBe("info");
+    assert.isDefined(records[4]);
+    expect(records[4]["msg"]).toBe("debug msg");
+    assert.isDefined(records[4]);
+    expect(records[4]["level"]).toBe("debug");
+    assert.isDefined(records[5]);
+    expect(records[5]["msg"]).toBe("trace msg");
+    assert.isDefined(records[5]);
+    expect(records[5]["level"]).toBe("trace");
   });
 
   it("does not invoke a metadata thunk when the level is disabled", () => {
@@ -166,8 +188,10 @@ describe("createForgeLogger", () => {
     logger.debug(() => ({ expensive: true }), "loud");
 
     expect(records).toHaveLength(1);
-    expect(records[0].msg).toBe("loud");
-    expect(records[0].expensive).toBe(true);
+    assert.isDefined(records[0]);
+    expect(records[0]["msg"]).toBe("loud");
+    assert.isDefined(records[0]);
+    expect(records[0]["expensive"]).toBe(true);
   });
 
   it("exposes isLevelEnabled for all seven levels", () => {
@@ -206,10 +230,14 @@ describe("createForgeLogger", () => {
     logger.log("debug", { foo: "bar" }, "dynamic debug");
 
     expect(records).toHaveLength(2);
-    expect(records[0].level).toBe("info");
-    expect(records[0].msg).toBe("dynamic info");
-    expect(records[1].level).toBe("debug");
-    expect(records[1].msg).toBe("dynamic debug");
+    assert.isDefined(records[0]);
+    expect(records[0]["level"]).toBe("info");
+    assert.isDefined(records[0]);
+    expect(records[0]["msg"]).toBe("dynamic info");
+    assert.isDefined(records[1]);
+    expect(records[1]["level"]).toBe("debug");
+    assert.isDefined(records[1]);
+    expect(records[1]["msg"]).toBe("dynamic debug");
   });
 
   it("does not emit when the dynamic level is disabled", () => {
@@ -255,9 +283,10 @@ describe("createForgeLogger", () => {
 
     unwrapPinoLogger(logger).info({ foo: "bar" }, "hello from pino directly");
 
-    const [record] = records;
-    expect(record.msg).toBe("hello from pino directly");
-    expect(record.foo).toBe("bar");
-    expect(record.name).toBe("unwrapped-service");
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["msg"]).toBe("hello from pino directly");
+    expect(record["foo"]).toBe("bar");
+    expect(record["name"]).toBe("unwrapped-service");
   });
 });

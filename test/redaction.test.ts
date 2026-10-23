@@ -1,5 +1,5 @@
 import fc from "fast-check";
-import { describe, expect, it, vi } from "vitest";
+import { assert, describe, expect, it, vi } from "vitest";
 import {
   createForgeLogger,
   DEFAULT_REDACT_PATHS,
@@ -35,7 +35,8 @@ describe("createForgeLogger default redaction", () => {
           logger.info({ data: input }, "batch again");
 
           expect(records).toHaveLength(2);
-          for (const record of records) expect(record.data).toEqual(expected);
+          for (const record of records)
+            expect(record["data"]).toEqual(expected);
           expect(JSON.stringify(input)).toBe(before);
           expect(leaf[key]).toBe(secret);
         },
@@ -76,6 +77,7 @@ describe("createForgeLogger default redaction", () => {
         operation: "sync",
       });
       expect(spy).toHaveBeenCalledOnce();
+      assert.isDefined(spy.mock.calls[0]);
       const line = spy.mock.calls[0][0] as string;
       expect(line).not.toContain(secret);
       expect(JSON.parse(line)).toMatchObject({
@@ -131,7 +133,7 @@ describe("createForgeLogger default redaction", () => {
       token: "synthetic-cycle-secret",
       count: 3,
     };
-    circular.self = circular;
+    circular["self"] = circular;
     const input = {
       date: new Date("2026-10-23T00:00:00.000Z"),
       source,
@@ -161,7 +163,7 @@ describe("createForgeLogger default redaction", () => {
     }
     expect(JSON.stringify(records)).not.toContain("synthetic-");
     expect(shared.password).toBe("synthetic-shared-secret");
-    expect(circular.self).toBe(circular);
+    expect(circular["self"]).toBe(circular);
     expect(source.toJSON).toBe(projected);
   });
 
@@ -180,7 +182,7 @@ describe("createForgeLogger default redaction", () => {
     logger.info(wide, "wide");
     expect(records).toHaveLength(2);
     for (const record of records) {
-      expect(record.logRecordOmitted).toBe("redaction limit reached");
+      expect(record["logRecordOmitted"]).toBe("redaction limit reached");
       expect(JSON.stringify(record)).not.toContain("synthetic-");
     }
     expect(beyondBudget).not.toHaveBeenCalled();
@@ -222,11 +224,11 @@ describe("createForgeLogger default redaction", () => {
       if (source === "lazy") logger.info(() => ({ data: value }), "source");
       if (source === "ambient")
         withLogContext({ data: value }, () => logger.info("source"));
-      if (source === "recordMetadata" || source === "base")
-        logger.info("source");
+      if (["recordMetadata", "base"].includes(source)) logger.info("source");
       if (source === "child") logger.child({ data: value }).info("source");
       expect(records).toHaveLength(1);
-      expect(records[0].data).toEqual({
+      assert.isDefined(records[0]);
+      expect(records[0]["data"]).toEqual({
         details: {
           headers:
             source === "recordMetadata"
@@ -238,7 +240,7 @@ describe("createForgeLogger default redaction", () => {
       });
       expect(JSON.stringify(records)).not.toContain("synthetic-");
       expect(value.details.custom).toBe("synthetic-custom-secret");
-      expect(value.details.headers.cookie).toBe("synthetic-cookie-secret");
+      expect(value.details["headers"].cookie).toBe("synthetic-cookie-secret");
     },
   );
 
@@ -261,6 +263,7 @@ describe("createForgeLogger default redaction", () => {
         },
       );
       expect(spy).toHaveBeenCalledOnce();
+      assert.isDefined(spy.mock.calls[0]);
       const line = spy.mock.calls[0][0] as string;
       expect(line).not.toContain("synthetic-");
       expect(JSON.parse(line)).toMatchObject({
@@ -330,7 +333,7 @@ describe("createForgeLogger default redaction", () => {
     expect(records[0]).toMatchObject({ status: 200, password: "[redacted]" });
     expect(secretGetter).not.toHaveBeenCalled();
     for (const record of records.slice(1))
-      expect(record.logRecordOmitted).toBe("redaction unavailable");
+      expect(record["logRecordOmitted"]).toBe("redaction unavailable");
     expect(JSON.stringify(records)).not.toContain("synthetic-");
   });
 
@@ -390,9 +393,10 @@ describe("createForgeLogger default redaction", () => {
       "custom + default redaction",
     );
 
-    const [record] = records;
-    expect(record.customSecretField).toBe("[redacted]");
-    expect(record.password).toBe("[redacted]");
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["customSecretField"]).toBe("[redacted]");
+    expect(record["password"]).toBe("[redacted]");
   });
 });
 

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { assert, describe, expect, it } from "vitest";
 import { logForgeInvocation, summarizeForgeInvocation } from "../src/index";
 import { createCapturingLogger } from "../src/testing";
 
@@ -64,11 +64,12 @@ describe("logForgeInvocation", () => {
 
     logForgeInvocation(logger, event, "invocation received");
 
-    const [record] = records;
-    expect(record.level).toBe("info");
-    expect(record.msg).toBe("invocation received");
-    expect(record.eventType).toBe("avi:jira:created:issue");
-    expect(record.method).toBe("POST");
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["level"]).toBe("info");
+    expect(record["msg"]).toBe("invocation received");
+    expect(record["eventType"]).toBe("avi:jira:created:issue");
+    expect(record["method"]).toBe("POST");
   });
 
   it("omits the event shape at info and includes eventShapeOmitted instead", () => {
@@ -79,9 +80,10 @@ describe("logForgeInvocation", () => {
       includeEventShape: true,
     });
 
-    const [record] = records;
-    expect(record.eventShape).toBeUndefined();
-    expect(record.eventShapeOmitted).toBe("requires debug or trace");
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["eventShape"]).toBeUndefined();
+    expect(record["eventShapeOmitted"]).toBe("requires debug or trace");
   });
 
   it("includes a bounded structural event shape at debug", () => {
@@ -95,9 +97,10 @@ describe("logForgeInvocation", () => {
       level: "debug",
     });
 
-    const [record] = records;
-    expect(record.eventShapeOmitted).toBeUndefined();
-    expect(record.eventShape).toEqual({
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["eventShapeOmitted"]).toBeUndefined();
+    expect(record["eventShape"]).toEqual({
       type: "object",
       keys: 2,
       values: [
@@ -115,8 +118,9 @@ describe("logger.forgeInvocation", () => {
 
     logger.forgeInvocation(event, "invocation received");
 
-    const [record] = records;
-    expect(record.level).toBe("info");
-    expect(record.eventType).toBe("avi:jira:created:issue");
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["level"]).toBe("info");
+    expect(record["eventType"]).toBe("avi:jira:created:issue");
   });
 });

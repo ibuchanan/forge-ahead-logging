@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { createForgeLogger } from "../src/index";
+import { assert, describe, expect, it } from "vitest";
 import packageJson from "../package.json";
+import { createForgeLogger } from "../src/index";
 
 function createStringCapturingLogger(options?: {
   pretty?: boolean;
@@ -38,6 +38,7 @@ describe("pretty mode", () => {
 
     logger.info({ userId: "u-123", requestId: "r-456" }, "handling request");
 
+    assert.isDefined(lines[0]);
     const parsed = JSON.parse(lines[0]);
     expect(parsed.msg).toBe("handling request");
     expect(parsed.userId).toBe("u-123");
@@ -64,6 +65,7 @@ describe("pretty mode", () => {
 
     logger.info({ userId: "u-123" }, "hello");
 
+    assert.isDefined(lines[0]);
     const parsed = JSON.parse(lines[0]);
     expect(parsed.msg).toBe("hello");
   });
@@ -86,6 +88,7 @@ describe("pretty mode", () => {
 
     logger.info({}, "ndjson");
 
+    assert.isDefined(lines[0]);
     const parsed = JSON.parse(lines[0]);
     expect(parsed.msg).toBe("ndjson");
   });

@@ -2,7 +2,7 @@
 
 ### 🐛 Bug Fixes
 
-- *(logging)* Order core log keys
+- _(logging)_ Order core log keys
 
 ### 📚 Documentation
 
@@ -12,11 +12,11 @@
 
 ### 🚀 Features
 
-- *(logging)* Add domain-error logging and MinimalLogger interface
+- _(logging)_ Add domain-error logging and MinimalLogger interface
 
 ### ⚙️ Miscellaneous Tasks
 
-- *(specs)* Remove used up specs
+- _(specs)_ Remove used up specs
 
 ## [0.3.0] - 2026-08-02
 

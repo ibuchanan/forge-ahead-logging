@@ -10,13 +10,13 @@ A small, opinionated, Forge-oriented wrapper around [`pino`](https://getpino.io/
 
 Choose the documentation that matches your goal:
 
-| I want to… | Read |
-| --- | --- |
+| I want to…                                     | Read                                                                     |
+| ---------------------------------------------- | ------------------------------------------------------------------------ |
 | Learn the package by building a Forge resolver | [Tutorial: Add structured logging to a Forge resolver](docs/tutorial.md) |
-| Complete a focused operational task | [How-to guides](docs/how-to.md) |
-| Look up an API, option, or default | [Reference](docs/reference.md) |
-| Understand the design decisions and trade-offs | [Explanation](docs/explanation.md) |
-| Work on this repository | [Development guide](DEVELOPMENT.md) |
+| Complete a focused operational task            | [How-to guides](docs/how-to.md)                                          |
+| Look up an API, option, or default             | [Reference](docs/reference.md)                                           |
+| Understand the design decisions and trade-offs | [Explanation](docs/explanation.md)                                       |
+| Work on this repository                        | [Development guide](DEVELOPMENT.md)                                      |
 
 ## Install
 
@@ -41,7 +41,6 @@ For a complete resolver integration—including ambient context, invocation life
 ## What the package provides
 
 The root package exposes production-oriented logging capabilities:
-
 - Pino-backed `ForgeLogger` construction and a ready-to-use default logger.
 - `LOG_LEVEL` resolution with environment-aware defaults.
 - Ambient invocation context for stable record enrichment.
@@ -51,7 +50,6 @@ The root package exposes production-oriented logging capabilities:
 - Temporary console capture for third-party dependencies.
 
 Additional entry points are intentionally separated:
-
 - `@forge-ahead/logging/demo` contains Demo Narrative Logging for examples and demonstrations.
 - `@forge-ahead/logging/testing` contains capturing logger utilities for tests.
 

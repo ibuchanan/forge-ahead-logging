@@ -5,7 +5,6 @@ This tutorial takes you through a small, working logging integration in a Forge 
 ## What you will build
 
 You will add a `getStatus` resolver that:
-
 - creates a Forge logger;
 - adds an invocation-scoped `requestId`;
 - logs the start and completion of the operation;
@@ -55,26 +54,21 @@ const resolver = new Resolver();
 resolver.define(
   "getStatus",
   async (request: StatusRequest): Promise<StatusResponse> =>
-    withLogContext(
-      { requestId: request.payload.requestId },
-      () =>
-        withForgeInvocationLogging(
-          logger,
-          { event: "getStatus" },
-          async () => {
-            const result: StatusResponse = {
-              ok: true,
-              service: "example-forge-app",
-            };
+    withLogContext({ requestId: request.payload.requestId }, () =>
+      withForgeInvocationLogging(
+        logger,
+        { event: "getStatus" },
+        async () => {
+          const result: StatusResponse = {
+            ok: true,
+            service: "example-forge-app",
+          };
 
-            logger.info(
-              { result: summarizeForLog(result) },
-              "status result",
-            );
-            return result;
-          },
-          { logEntry: true },
-        ),
+          logger.info({ result: summarizeForLog(result) }, "status result");
+          return result;
+        },
+        { logEntry: true },
+      ),
     ),
 );
 
@@ -169,7 +163,6 @@ You’ll notice that Forge supplies platform metadata such as an invocation iden
 ## What you learned
 
 You now have a minimal pattern for logging a Forge backend operation:
-
 1. define typed resolver input and output;
 2. establish context at the invocation boundary;
 3. wrap the operation with invocation logging;

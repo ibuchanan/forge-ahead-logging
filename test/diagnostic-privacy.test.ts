@@ -1,5 +1,5 @@
 import { err } from "@forge-ahead/errors";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, assert, describe, expect, it, vi } from "vitest";
 import {
   defineLogObjectSummaryPolicy,
   installConsoleCapture,
@@ -11,6 +11,10 @@ import {
 } from "../src/index";
 import { createCapturingLogger } from "../src/testing";
 import { atEachLevel, expectNoneEscaped } from "./privacy-helpers";
+
+function eventShapeOptions(includeEventShape: boolean | undefined) {
+  return includeEventShape === undefined ? {} : { includeEventShape };
+}
 
 const privateText =
   "synthetic-person@example.test Bearer synthetic-token customer comment";
@@ -75,9 +79,10 @@ it.each([
         headers: { omitted: true, keys: 1 },
         body: { omitted: true, length: privateText.length },
       });
-      logForgeInvocation(logger, event, "received", { includeEventShape });
-      logger.forgeInvocation(event, "received", { includeEventShape });
-      const options = { logEntry: true, includeEventShape };
+      const invocationOptions = eventShapeOptions(includeEventShape);
+      logForgeInvocation(logger, event, "received", invocationOptions);
+      logger.forgeInvocation(event, "received", invocationOptions);
+      const options = { ...invocationOptions, logEntry: true };
       const result = { processed: true };
       expect(
         withForgeInvocationLogging(logger, event, () => result, options),
@@ -131,23 +136,22 @@ it.each([
       }
       expect(records).toHaveLength(level === "info" ? 13 : 16);
       const invocationRecords = records.filter(
-        (record) => record.kind === "forgeEvent",
+        (record) => record["kind"] === "forgeEvent",
       );
       expect(invocationRecords).toHaveLength(10);
-      const shapeRecords = invocationRecords.filter(
-        (record) =>
-          record.msg === "received" || record.msg === "invocation started",
+      const shapeRecords = invocationRecords.filter((record) =>
+        ["received", "invocation started"].includes(String(record["msg"])),
       );
       expect(shapeRecords).toHaveLength(6);
       for (const record of shapeRecords) {
         if (enabled && level !== "info")
-          expect(record.eventShape).toMatchObject({
+          expect(record["eventShape"]).toMatchObject({
             type: "object",
             keys: 8,
           });
-        else expect(record.eventShape).toBeUndefined();
+        else expect(record["eventShape"]).toBeUndefined();
         if (includeEventShape === true && level === "info")
-          expect(record.eventShapeOmitted).toBe("requires debug or trace");
+          expect(record["eventShapeOmitted"]).toBe("requires debug or trace");
       }
       expectPrivateDataAbsent(records);
       expect(event.contextToken).toBe(privateText);
@@ -194,7 +198,7 @@ describe("structural bounds", () => {
       throw new Error(privateText);
     });
     const circular: Record<string, unknown> = {};
-    circular.self = circular;
+    circular["self"] = circular;
     const event = {
       first: Array.from({ length: 7 }, () => privateText),
       second: Object.fromEntries(
@@ -207,7 +211,8 @@ describe("structural bounds", () => {
       },
     };
     logForgeInvocation(logger, event, "received", { includeEventShape: true });
-    expect(records[0].eventShape).toEqual({
+    assert.isDefined(records[0]);
+    expect(records[0]["eventShape"]).toEqual({
       type: "object",
       keys: 5,
       values: [
@@ -251,7 +256,8 @@ describe("structural bounds", () => {
       maxArrayItems: 1,
       maxDepth: 1,
     });
-    expect(records[1].eventShape).toEqual({
+    assert.isDefined(records[1]);
+    expect(records[1]["eventShape"]).toEqual({
       type: "object",
       keys: 5,
       values: [{ type: "array", omitted: "max depth" }],
@@ -273,7 +279,8 @@ describe("structural bounds", () => {
       () => privateText,
       { toJSON },
     ]);
-    expect(records[0].debugProbe).toEqual({
+    assert.isDefined(records[0]);
+    expect(records[0]["debugProbe"]).toEqual({
       label: "operation",
       value: {
         type: "array",
@@ -363,7 +370,8 @@ describe("structural probes", () => {
         metadata: () => ({ attempts: 2, customer: privateText }),
       }),
     ).toBe(value);
-    expect(records[0].debugProbe).toEqual({
+    assert.isDefined(records[0]);
+    expect(records[0]["debugProbe"]).toEqual({
       label: "operation",
       value: { kind: "operation", name: "sync", id: 7 },
       metadata: { kind: "retry", attempts: 2 },
@@ -386,7 +394,7 @@ describe("structural probes", () => {
       }),
     ).resolves.toBe(value);
     for (const record of records) {
-      expect(record.debugProbe).toEqual({
+      expect(record["debugProbe"]).toEqual({
         label: "operation",
         value: {
           type: "object",
@@ -423,7 +431,8 @@ describe("structural invocation diagnostics", () => {
         includeEventShape: true,
       }),
     ).not.toThrow();
-    expect(records[0].eventShape).toEqual({
+    assert.isDefined(records[0]);
+    expect(records[0]["eventShape"]).toEqual({
       type: "unknown",
       omitted: "unavailable",
     });
@@ -439,7 +448,8 @@ describe("structural invocation diagnostics", () => {
 
     logForgeInvocation(logger, event, "received", { includeEventShape: true });
 
-    expect(records[0].eventShape).toEqual({
+    assert.isDefined(records[0]);
+    expect(records[0]["eventShape"]).toEqual({
       type: "object",
       keys: 1,
       values: [

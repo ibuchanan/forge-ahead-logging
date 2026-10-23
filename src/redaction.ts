@@ -52,7 +52,7 @@ function redactPathsOf(
 
 export function withDefaultRedaction(
   redact?: pino.LoggerOptions["redact"],
-): pino.LoggerOptions["redact"] {
+): pino.redactOptions {
   return {
     paths: [...DEFAULT_REDACT_PATHS, ...redactPathsOf(redact)],
     censor: DEFAULT_REDACTION_CENSOR,
@@ -61,8 +61,7 @@ export function withDefaultRedaction(
 }
 
 function baseNameOf(path: string): string {
-  const segments = path.split(".");
-  return segments[segments.length - 1].toLowerCase();
+  return path.slice(path.lastIndexOf(".") + 1).toLowerCase();
 }
 
 const DEFAULT_SECRET_SHAPED_KEYS: readonly string[] = Array.from(
@@ -116,6 +115,27 @@ export function redactLogRecord(
   }
 }
 
+function redactPrimitive(
+  value: unknown,
+  budget: { entries: number; characters: number },
+): unknown {
+  if (typeof value === "string") {
+    budget.characters -= value.length;
+    if (budget.characters < 0) throw REDACTION_LIMIT;
+  }
+  return typeof value === "function" ? undefined : value;
+}
+
+function isBoxedPrimitive(
+  value: object,
+): value is { valueOf(): string | number | boolean } {
+  return (
+    value instanceof String ||
+    value instanceof Number ||
+    value instanceof Boolean
+  );
+}
+
 function redactRecordValue(
   value: unknown,
   budget: { entries: number; characters: number },
@@ -124,57 +144,61 @@ function redactRecordValue(
   key = "",
   applyToJSON = false,
 ): unknown {
-  if (typeof value === "string") {
-    budget.characters -= value.length;
-    if (budget.characters < 0) throw REDACTION_LIMIT;
-  }
-  if (typeof value === "function") return undefined;
-  if (value === null || typeof value !== "object") return value;
+  if (value === null || typeof value !== "object")
+    return redactPrimitive(value, budget);
   if (seen.has(value)) return "[Circular]";
   if (depth >= MAX_REDACTION_DEPTH) throw REDACTION_LIMIT;
   if (applyToJSON && "toJSON" in value && typeof value.toJSON === "function") {
     return redactRecordValue(value.toJSON(key), budget, seen, depth + 1, key);
   }
-  if (
-    value instanceof String ||
-    value instanceof Number ||
-    value instanceof Boolean
-  ) {
+  if (isBoxedPrimitive(value)) {
     return redactRecordValue(value.valueOf(), budget, seen, depth, key);
   }
+  return redactContainer(value, budget, seen, depth);
+}
+
+function redactContainer(
+  value: object,
+  budget: { entries: number; characters: number },
+  seen: Set<object>,
+  depth: number,
+): unknown {
   seen.add(value);
-  if (Array.isArray(value)) {
-    budget.entries -= value.length;
-    if (budget.entries < 0) throw REDACTION_LIMIT;
-    const result = Array.from({ length: value.length }, (_, index) =>
-      redactRecordValue(
-        value[index],
-        budget,
-        seen,
-        depth + 1,
-        String(index),
-        true,
-      ),
-    );
-    seen.delete(value);
-    return result;
-  }
+  const result = Array.isArray(value)
+    ? redactArray(value as unknown[], budget, seen, depth)
+    : redactObject(value as Record<string, unknown>, budget, seen, depth);
+  seen.delete(value);
+  return result;
+}
+
+function redactArray(
+  arr: unknown[],
+  budget: { entries: number; characters: number },
+  seen: Set<object>,
+  depth: number,
+): unknown[] {
+  budget.entries -= arr.length;
+  if (budget.entries < 0) throw REDACTION_LIMIT;
+  return Array.from({ length: arr.length }, (_, index) =>
+    redactRecordValue(arr[index], budget, seen, depth + 1, String(index), true),
+  );
+}
+
+function redactObject(
+  obj: Record<string, unknown>,
+  budget: { entries: number; characters: number },
+  seen: Set<object>,
+  depth: number,
+): Record<string, unknown> {
   const result: Record<string, unknown> = {};
-  for (const key in value) {
-    if (!Object.hasOwn(value, key)) continue;
+  for (const key in obj) {
+    if (!Object.hasOwn(obj, key)) continue;
     if (--budget.entries < 0) throw REDACTION_LIMIT;
     budget.characters -= key.length;
     if (budget.characters < 0) throw REDACTION_LIMIT;
     const entry = isSecretShapedKey(key, [])
       ? DEFAULT_REDACTION_CENSOR
-      : redactRecordValue(
-          (value as Record<string, unknown>)[key],
-          budget,
-          seen,
-          depth + 1,
-          key,
-          true,
-        );
+      : redactRecordValue(obj[key], budget, seen, depth + 1, key, true);
     Object.defineProperty(result, key, {
       value: entry,
       enumerable: true,
@@ -182,6 +206,5 @@ function redactRecordValue(
       writable: true,
     });
   }
-  seen.delete(value);
   return result;
 }

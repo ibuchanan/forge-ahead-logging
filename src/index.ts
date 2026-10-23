@@ -92,6 +92,34 @@ function isForgeLogLevel(value: string): value is ForgeLogLevel {
   return (FORGE_LOG_LEVELS as readonly string[]).includes(value);
 }
 
+function parseLogLevels(
+  rawLevel: string,
+  name: string | undefined,
+): {
+  level: ForgeLogLevel | undefined;
+  invalidValue: string | undefined;
+} {
+  let globalLevel: ForgeLogLevel | undefined;
+  let invalidValue: string | undefined;
+  const overrides = new Map<string, ForgeLogLevel>();
+  for (const segment of rawLevel.split(",")) {
+    const trimmed = segment.trim();
+    if (trimmed === "") continue;
+    const eqIndex = trimmed.indexOf("=");
+    const level = eqIndex === -1 ? trimmed : trimmed.slice(eqIndex + 1).trim();
+    if (!isForgeLogLevel(level)) {
+      invalidValue ??= trimmed;
+    } else if (eqIndex === -1) {
+      globalLevel = level;
+    } else {
+      overrides.set(trimmed.slice(0, eqIndex).trim(), level);
+    }
+  }
+  const level =
+    (name === undefined ? undefined : overrides.get(name)) ?? globalLevel;
+  return { level, invalidValue };
+}
+
 export function resolveLogLevel(): ResolvedForgeLogLevel;
 export function resolveLogLevel(
   env: Record<string, string | undefined>,
@@ -104,64 +132,23 @@ export function resolveLogLevel(
   nameOrEnv?: string | Record<string, string | undefined>,
   maybeEnv?: Record<string, string | undefined>,
 ): ResolvedForgeLogLevel {
-  let name: string | undefined;
-  let env: Record<string, string | undefined>;
-  if (typeof nameOrEnv === "string") {
-    name = nameOrEnv;
-    env = maybeEnv ?? process.env;
-  } else if (nameOrEnv !== undefined) {
-    env = nameOrEnv;
-  } else {
-    env = maybeEnv ?? process.env;
+  const name = typeof nameOrEnv === "string" ? nameOrEnv : undefined;
+  const env =
+    typeof nameOrEnv === "object" ? nameOrEnv : (maybeEnv ?? process.env);
+  const { level, invalidValue } = parseLogLevels(env["LOG_LEVEL"] ?? "", name);
+  if (level !== undefined) {
+    return {
+      level,
+      source: "LOG_LEVEL",
+      ...(invalidValue === undefined ? {} : { invalidValue }),
+    };
   }
-
-  const rawLevel = env.LOG_LEVEL;
-  if (rawLevel !== undefined && rawLevel !== "") {
-    const segments = rawLevel.split(",");
-    let globalLevel: ForgeLogLevel | undefined;
-    const overrides: Record<string, ForgeLogLevel> = {};
-    let invalidValue: string | undefined;
-
-    for (const segment of segments) {
-      const trimmed = segment.trim();
-      if (trimmed === "") {
-        continue;
-      }
-      const eqIndex = trimmed.indexOf("=");
-      if (eqIndex === -1) {
-        if (isForgeLogLevel(trimmed)) {
-          globalLevel = trimmed;
-        } else {
-          invalidValue = invalidValue ?? trimmed;
-        }
-      } else {
-        const segmentName = trimmed.slice(0, eqIndex).trim();
-        const segmentLevel = trimmed.slice(eqIndex + 1).trim();
-        if (isForgeLogLevel(segmentLevel)) {
-          overrides[segmentName] = segmentLevel;
-        } else {
-          invalidValue = invalidValue ?? trimmed;
-        }
-      }
-    }
-
-    if (name !== undefined && overrides[name] !== undefined) {
-      return { level: overrides[name], source: "LOG_LEVEL", invalidValue };
-    }
-
-    if (globalLevel !== undefined) {
-      return { level: globalLevel, source: "LOG_LEVEL", invalidValue };
-    }
-
-    if (invalidValue !== undefined) {
-      return { level: "info", source: "default", invalidValue };
-    }
+  if (invalidValue !== undefined) {
+    return { level: "info", source: "default", invalidValue };
   }
-
-  if (env.NODE_ENV === "development") {
-    return { level: "debug", source: "NODE_ENV" };
-  }
-  return { level: "info", source: "default" };
+  return env["NODE_ENV"] === "development"
+    ? { level: "debug", source: "NODE_ENV" }
+    : { level: "info", source: "default" };
 }
 
 export function getLogLevel(
@@ -277,7 +264,7 @@ function resolveLogCall(
   obj: Record<string, unknown> | string | (() => Record<string, unknown>),
   level: ForgeLogLevel,
   pinoLogger: pino.Logger,
-): { obj: Record<string, unknown>; message?: string } {
+): { obj: Record<string, unknown>; message: string | undefined } {
   let resolved: Record<string, unknown> | string;
   if (typeof obj === "function") {
     resolved = obj();
@@ -380,7 +367,7 @@ interface ForgeDestination extends pino.DestinationStream {
 // the console method matching its severity.
 function createForgeDestination(): pino.DestinationStream {
   const destination: ForgeDestination = {
-    lastLevel: pino.levels.values.info,
+    lastLevel: pino.levels.values["info"] ?? 30,
     write(chunk: string): void {
       const line = chunk.endsWith("\n") ? chunk.slice(0, -1) : chunk;
       writeLogLineToConsole(destination.lastLevel, line);
@@ -407,9 +394,9 @@ function formatPrettyValue(value: unknown): string {
 
 function formatPrettyLine(chunk: string): string {
   const record = JSON.parse(chunk) as Record<string, unknown>;
-  const timestamp = new Date(record.time as number).toISOString();
-  const level = String(record.level).toUpperCase();
-  const message = String(record.msg ?? "");
+  const timestamp = new Date(record["time"] as number).toISOString();
+  const level = String(record["level"]).toUpperCase();
+  const message = String(record["msg"] ?? "");
   const fields = Object.entries(record)
     .filter(([key]) => key !== "time" && key !== "level" && key !== "msg")
     .map(([key, value]) => `${key}=${formatPrettyValue(value)}`)
@@ -436,8 +423,9 @@ function orderLogRecord(
   ]);
 }
 
-function createOrderedDestination(
+function mapDestination(
   destination: pino.DestinationStream,
+  format: (chunk: string) => string,
 ): pino.DestinationStream {
   const wrapper: ForgeDestination = {
     get lastLevel(): number {
@@ -447,10 +435,7 @@ function createOrderedDestination(
       (destination as ForgeDestination).lastLevel = value;
     },
     write(chunk: string): void {
-      const newline = chunk.endsWith("\n") ? "\n" : "";
-      const line = newline ? chunk.slice(0, -1) : chunk;
-      const record = JSON.parse(line) as Record<string, unknown>;
-      destination.write(`${JSON.stringify(orderLogRecord(record))}${newline}`);
+      destination.write(format(chunk));
     },
   };
   (wrapper as unknown as Record<symbol, boolean>)[
@@ -459,25 +444,11 @@ function createOrderedDestination(
   return wrapper;
 }
 
-function createPrettyDestination(
-  destination: pino.DestinationStream,
-): pino.DestinationStream {
-  const wrapper: ForgeDestination = {
-    get lastLevel(): number {
-      return (destination as ForgeDestination).lastLevel;
-    },
-    set lastLevel(value: number) {
-      (destination as ForgeDestination).lastLevel = value;
-    },
-    write(chunk: string): void {
-      const line = formatPrettyLine(chunk);
-      destination.write(line);
-    },
-  };
-  (wrapper as unknown as Record<symbol, boolean>)[
-    pino.symbols.needsMetadataGsym
-  ] = true;
-  return wrapper;
+function formatOrderedLine(chunk: string): string {
+  const newline = chunk.endsWith("\n") ? "\n" : "";
+  const line = newline ? chunk.slice(0, -1) : chunk;
+  const record = JSON.parse(line) as Record<string, unknown>;
+  return `${JSON.stringify(orderLogRecord(record))}${newline}`;
 }
 
 function isoTime(): string {
@@ -486,7 +457,7 @@ function isoTime(): string {
 
 function resolveTimestamp(
   options: ForgeLoggerOptions,
-): pino.LoggerOptions["timestamp"] {
+): (() => string) | boolean {
   return options.timestamp === "iso" ? isoTime : true;
 }
 
@@ -494,7 +465,7 @@ function isPrettyEnabled(
   options: ForgeLoggerOptions,
   env: Record<string, string | undefined>,
 ): boolean {
-  return options.pretty === true || env.FORGE_LOG_PRETTY === "true";
+  return options.pretty === true || env["FORGE_LOG_PRETTY"] === "true";
 }
 
 export function createForgeLogger(
@@ -503,15 +474,16 @@ export function createForgeLogger(
 ): ForgeLogger {
   const env = options.env ?? process.env;
   const { level } = resolveLogLevel(options.name, env);
-  const effectiveDestination = createOrderedDestination(
+  const effectiveDestination = mapDestination(
     isPrettyEnabled(options, env)
-      ? createPrettyDestination(destination)
+      ? mapDestination(destination, formatPrettyLine)
       : destination,
+    formatOrderedLine,
   );
   const pinoLogger = pino(
     {
       level,
-      name: options.name,
+      ...(options.name === undefined ? {} : { name: options.name }),
       base: redactLogRecord(options.base ?? {}),
       redact: withDefaultRedaction(options.redact),
       timestamp: resolveTimestamp(options),

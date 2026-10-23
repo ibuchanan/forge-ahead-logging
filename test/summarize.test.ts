@@ -1,5 +1,5 @@
 import fc from "fast-check";
-import { describe, expect, it } from "vitest";
+import { assert, describe, expect, it } from "vitest";
 import { type JSONValue, summarizeForLog } from "../src/index";
 import { secretKey, secretKeys } from "./privacy-arbitraries";
 
@@ -166,12 +166,15 @@ describe("summarizeForLog", () => {
           const visited = Math.min(arrays.length, maxDepth);
           for (const array of arrays.slice(0, visited)) {
             expect(Array.isArray(result)).toBe(array);
-            result = array
+            const child = array
               ? (result as JSONValue[])[0]
-              : (result as Record<string, JSONValue>).next;
+              : (result as Record<string, JSONValue>)["next"];
+            assert.isDefined(child);
+            result = child;
           }
+          const leafDepth = arrays.length + Number(!scalar);
           expect(result).toEqual(
-            maxDepth < arrays.length || (maxDepth === arrays.length && !scalar)
+            maxDepth < leafDepth
               ? "[max depth reached]"
               : scalar
                 ? 7
@@ -194,12 +197,12 @@ describe("summarizeForLog", () => {
 
   it("replaces circular references with a marker", () => {
     const obj: Record<string, unknown> = { name: "root" };
-    obj.self = obj;
+    obj["self"] = obj;
 
     const result = summarizeForLog(obj) as Record<string, unknown>;
 
-    expect(result.name).toBe("root");
-    expect(result.self).toBe("[circular]");
+    expect(result["name"]).toBe("root");
+    expect(result["self"]).toBe("[circular]");
   });
 
   it("converts non-JSON values into string markers", () => {

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { assert, describe, expect, it, vi } from "vitest";
 import { logProbe } from "../src/index";
 import { createCapturingLogger } from "../src/testing";
 
@@ -25,7 +25,8 @@ describe("logProbe", () => {
       env: { LOG_LEVEL: "trace" },
     });
     logProbe(logger, "answer", 42, { level: "trace" });
-    expect(records[0].level).toBe("trace");
+    assert.isDefined(records[0]);
+    expect(records[0]["level"]).toBe("trace");
   });
 
   it("fulfills with the original resolved value and logs after settling", async () => {
@@ -82,7 +83,8 @@ describe("logProbe", () => {
       env: { LOG_LEVEL: "debug" },
     });
     logProbe(logger, "answer", 42, { metadata: { requestId: "req-1" } });
-    expect(records[0].debugProbe).toMatchObject({
+    assert.isDefined(records[0]);
+    expect(records[0]["debugProbe"]).toMatchObject({
       metadata: {
         type: "object",
         keys: 1,
@@ -106,7 +108,8 @@ describe("logProbe", () => {
     const metadata = vi.fn(() => ({ computed: true }));
     logProbe(logger, "answer", 42, { metadata });
     expect(metadata).toHaveBeenCalledOnce();
-    expect(records[0].debugProbe).toMatchObject({
+    assert.isDefined(records[0]);
+    expect(records[0]["debugProbe"]).toMatchObject({
       metadata: { type: "object", keys: 1, values: [{ type: "boolean" }] },
     });
   });
@@ -134,7 +137,8 @@ describe("logProbe", () => {
       keys: 1,
       values: [{ type: "string", length: 3 }],
     };
-    expect(records[0].debugProbe).toEqual({
+    assert.isDefined(records[0]);
+    expect(records[0]["debugProbe"]).toEqual({
       label: "answer",
       value: expected,
       metadata: expected,

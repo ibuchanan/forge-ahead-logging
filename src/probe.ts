@@ -55,7 +55,7 @@ function emitProbe(
     const debugProbe: Record<string, unknown> = { label, ...summarize() };
     const metadata = resolveProbeMetadata(options);
     if (metadata !== undefined) {
-      debugProbe.metadata = metadata;
+      debugProbe["metadata"] = metadata;
     }
     logger[level]({ debugProbe });
   } catch {

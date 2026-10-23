@@ -4,30 +4,29 @@ This page is a lookup reference for the package’s public APIs and operational 
 
 ## Package entry points
 
-| Import | Purpose |
-| --- | --- |
-| `@forge-ahead/logging` | Production logger, context, summaries, invocation logging, result/error logging, and logger construction. |
-| `@forge-ahead/logging/demo` | Demo Narrative Logging; intentionally separate from the production root export. |
-| `@forge-ahead/logging/testing` | Capturing logger utilities for tests. |
+| Import                         | Purpose                                                                                                   |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| `@forge-ahead/logging`         | Production logger, context, summaries, invocation logging, result/error logging, and logger construction. |
+| `@forge-ahead/logging/demo`    | Demo Narrative Logging; intentionally separate from the production root export.                           |
+| `@forge-ahead/logging/testing` | Capturing logger utilities for tests.                                                                     |
 
 ## Log levels
 
 `ForgeLogLevel` is one of:
 
-| Level | Ordering |
-| --- | ---: |
-| `fatal` | 60 |
-| `error` | 50 |
-| `warn` | 40 |
-| `info` | 30 |
-| `debug` | 20 |
-| `trace` | 10 |
+| Level    | Ordering |
+| -------- | -------: |
+| `fatal`  |       60 |
+| `error`  |       50 |
+| `warn`   |       40 |
+| `info`   |       30 |
+| `debug`  |       20 |
+| `trace`  |       10 |
 | `silent` | Disabled |
 
 `resolveLogLevel(name?, env?)` returns the selected level, its source, and invalid configuration metadata without emitting a record. `getLogLevel(...)` returns the effective level.
 
 Resolution precedence:
-
 1. a valid `LOG_LEVEL` value;
 2. a valid `NODE_ENV` mapping;
 3. the package default.
@@ -40,12 +39,12 @@ Invalid configured segments fall through to the next applicable source.
 
 Creates a `ForgeLogger` backed by Pino. Relevant options include:
 
-| Option | Meaning |
-| --- | --- |
-| `name` | Logger name or service identity. |
-| `pretty` | Human-readable local formatting. |
-| `timestamp` | `"epoch"` or `"iso"`. |
-| `redact` | Additional redaction configuration. |
+| Option           | Meaning                                          |
+| ---------------- | ------------------------------------------------ |
+| `name`           | Logger name or service identity.                 |
+| `pretty`         | Human-readable local formatting.                 |
+| `timestamp`      | `"epoch"` or `"iso"`.                            |
+| `redact`         | Additional redaction configuration.              |
 | `recordMetadata` | Stable fields added to records from this logger. |
 
 ### `log`
@@ -86,13 +85,13 @@ Returns Pino redaction options containing the package’s default secret-shaped 
 
 `ForgeLogger` recursively censors recognized secret-shaped keys (case-insensitive authorization, cookie/set-cookie, token/accessToken/refreshToken/contextToken/jwt, password, apiKey/api_key, secret/clientSecret/client_secret) before record serialization. The backstop covers ordinary/lazy structured arguments, ambient context, base/child bindings, and already-summarized record metadata. Operational siblings remain intact within the limits below. Console arguments remain structural, not value-bearing; console enrichment receives the same backstop. Base and child bindings are sanitized before Pino pre-serializes them, so inherited binding copies contain no original recognized secret values.
 
-| Boundary | Behavior |
-| --- | --- |
-| Container depth | At most 32 levels, including the record root; each evaluated `toJSON` result consumes an additional level. |
-| Traversal | At most 10,000 object properties plus array slots per sanitized record/snapshot; source merging separately accepts at most 10,000 own enumerable properties, including overwritten ones. |
-| Structured text | At most 1,000,000 UTF-16 code units across visited property names and retained string values; not an exact encoded-byte limit. |
-| Limit exceeded | Entire structured record/snapshot replaced with `{ logRecordOmitted: "redaction limit reached" }`; no unchecked subtree returned. Normal level/time and separately supplied message remain. |
-| Inspection/serialization failure during redaction | Entire structured record/snapshot replaced with `{ logRecordOmitted: "redaction unavailable" }`; no exception text copied. |
+| Boundary                                          | Behavior                                                                                                                                                                                    |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Container depth                                   | At most 32 levels, including the record root; each evaluated `toJSON` result consumes an additional level.                                                                                  |
+| Traversal                                         | At most 10,000 object properties plus array slots per sanitized record/snapshot; source merging separately accepts at most 10,000 own enumerable properties, including overwritten ones.    |
+| Structured text                                   | At most 1,000,000 UTF-16 code units across visited property names and retained string values; not an exact encoded-byte limit.                                                              |
+| Limit exceeded                                    | Entire structured record/snapshot replaced with `{ logRecordOmitted: "redaction limit reached" }`; no unchecked subtree returned. Normal level/time and separately supplied message remain. |
+| Inspection/serialization failure during redaction | Entire structured record/snapshot replaced with `{ logRecordOmitted: "redaction unavailable" }`; no exception text copied.                                                                  |
 
 Traversal creates fresh objects/arrays and does not modify caller-owned values, including frozen values and repeated aliases. Object traversal uses own enumerable string keys; arrays retain indexed values and holes serialize as `null`. Date and custom nested `toJSON(key)` results are sanitized before Pino sees them; getters for non-secret fields are evaluated, while recognized secret-field getters are not. Custom getters/`toJSON` can run application code and are not sandboxed or time-bounded. Their side effects are the application's responsibility. Boxed strings/numbers/booleans retain their JSON primitive representation. Functions/symbols/undefined retain normal JSON omission/null behavior; cycles use `[Circular]`. Raw Error objects still are not automatic error projections; use `logError` for the supported error contract. Existing summary/metadata bounds remain in place before the backstop. Disabled records skip traversal and lazy metadata; base/child snapshots are sanitized when constructed regardless of current level.
 
@@ -106,13 +105,13 @@ Validates a reusable allow-list projection for a domain object at definition tim
 
 `LogObjectSummaryPolicy` contains:
 
-| Property | Contract |
-| --- | --- |
-| `kind` | Nonblank string identifying the summary category. |
-| `fields` | Required field map of output aliases to source paths/selections; an empty map is valid. |
-| `labels` | Optional field map, validated even when labels are disabled. |
-| `review` | Optional definition-only metadata; existing safe policies need not supply it. |
-| `review.purpose` | Nonblank string describing the troubleshooting need. |
+| Property                     | Contract                                                                                                                                                           |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `kind`                       | Nonblank string identifying the summary category.                                                                                                                  |
+| `fields`                     | Required field map of output aliases to source paths/selections; an empty map is valid.                                                                            |
+| `labels`                     | Optional field map, validated even when labels are disabled.                                                                                                       |
+| `review`                     | Optional definition-only metadata; existing safe policies need not supply it.                                                                                      |
+| `review.purpose`             | Nonblank string describing the troubleshooting need.                                                                                                               |
 | `review.indirectIdentifiers` | `{ treatment: "excluded" }` or `{ treatment: "retained", justification: string }`, with a nonblank justification for retention. Required when `review` is present. |
 
 A selection is a dot-separated string path, a nonempty array of literal string segments, or `{ path, transform? }`. Segments must be nonblank; empty paths/segments and unknown transforms are rejected. Omitted/`undefined` transforms mean `identity`. Maps and metadata must be non-null, non-array objects. Validation does not trim or rewrite definitions.
@@ -133,11 +132,11 @@ Projects and summarizes an object according to a `LogObjectSummaryPolicy`. `fiel
 
 `LogFieldTransform` supports these named, package-controlled transformations. Policies do not accept arbitrary callback functions.
 
-| Transform | Output |
-| --- | --- |
-| `identity` (default) | The selected value passed through the bounded value summarizer. |
-| `redact` | `[redacted]` for a present field. |
-| `omittedShape` | `{ omitted: true }`, plus `length` for strings, `items` for arrays, or `keys` for objects; no field names or values are copied. |
+| Transform            | Output                                                                                                                          |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `identity` (default) | The selected value passed through the bounded value summarizer.                                                                 |
+| `redact`             | `[redacted]` for a present field.                                                                                               |
+| `omittedShape`       | `{ omitted: true }`, plus `length` for strings, `items` for arrays, or `keys` for objects; no field names or values are copied. |
 
 ## Forge event logging
 
@@ -145,18 +144,18 @@ Projects and summarizes an object according to a `LogObjectSummaryPolicy`. `fiel
 
 Returns the minimized `FORGE_EVENT_SUMMARY_POLICY` projection used by standalone invocation records and lifecycle entry/completion/failure records. Missing fields are omitted. The summary does not depend on logger redaction or the configured log level.
 
-| Retained field | Troubleshooting purpose |
-| --- | --- |
-| `kind: "forgeEvent"` | Identify the record category. |
-| `eventType` | Identify the Forge event subscription being handled. |
-| `method` | Distinguish HTTP invocation methods. |
-| `requestId` | Correlate records for a platform request, not a customer identity. |
-| `moduleKey` from `context.moduleKey` | Identify the configured app module. |
-| `functionKey` from `call.functionKey` | Identify the configured function. |
-| `appId` from `app.id` | Identify the app, not a customer installation or tenant. |
-| `appVersion` from `app.version` | Correlate behavior with a deployed app version. |
-| `selfGenerated` | Diagnose app-generated event loops. |
-| `headers`, `body` | `omittedShape` metadata only: presence and size/count, without names or values. |
+| Retained field                        | Troubleshooting purpose                                                         |
+| ------------------------------------- | ------------------------------------------------------------------------------- |
+| `kind: "forgeEvent"`                  | Identify the record category.                                                   |
+| `eventType`                           | Identify the Forge event subscription being handled.                            |
+| `method`                              | Distinguish HTTP invocation methods.                                            |
+| `requestId`                           | Correlate records for a platform request, not a customer identity.              |
+| `moduleKey` from `context.moduleKey`  | Identify the configured app module.                                             |
+| `functionKey` from `call.functionKey` | Identify the configured function.                                               |
+| `appId` from `app.id`                 | Identify the app, not a customer installation or tenant.                        |
+| `appVersion` from `app.version`       | Correlate behavior with a deployed app version.                                 |
+| `selfGenerated`                       | Diagnose app-generated event loops.                                             |
+| `headers`, `body`                     | `omittedShape` metadata only: presence and size/count, without names or values. |
 
 These value-bearing fields are intended for platform/app-controlled operational metadata, not user-generated text. The summary does not automatically select Cloud, account, site, or tenant identifiers. It excludes `contextToken` (including fragments), raw paths/URLs, query keys/values, and arbitrary payload content. No route is inferred from a URL. Query parameters are omitted entirely, without a count.
 
@@ -168,16 +167,16 @@ The same projection applies at `info`, `debug`, and `trace` logger thresholds. S
 
 `eventShape`, unprojected probe values/metadata, and captured console arguments share a structural representation. It never copies leaf values or input property names, including unknown/customer-controlled keys. The built-in invocation and automatic error projections remain unchanged when verbosity increases.
 
-| Input | Structural output |
-| --- | --- |
-| `null` | `{ type: "null" }` |
-| String | `{ type: "string", length: number }`; no prefix or suffix. |
+| Input                       | Structural output                                                                                                                   |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `null`                      | `{ type: "null" }`                                                                                                                  |
+| String                      | `{ type: "string", length: number }`; no prefix or suffix.                                                                          |
 | Other primitive or function | `{ type: "number" }`, `"boolean"`, `"undefined"`, `"bigint"`, `"symbol"`, or `"function"`; no value, description, or function name. |
-| Object | `{ type: "object", keys: number, values: [...] }`; unnamed child shapes in own enumerable string-key order. |
-| Array | `{ type: "array", items: number, values: [...] }`; unnamed enumerable entry shapes. |
-| Accessor property | `{ type: "accessor" }`; getters/setters are not invoked. |
-| Depth/cycle boundary | `{ type: "object" \| "array", omitted: "max depth" \| "circular" }`. |
-| Inspection failure | `{ type: "unknown", omitted: "unavailable" }` for the whole structural summary; no exception text. |
+| Object                      | `{ type: "object", keys: number, values: [...] }`; unnamed child shapes in own enumerable string-key order.                         |
+| Array                       | `{ type: "array", items: number, values: [...] }`; unnamed enumerable entry shapes.                                                 |
+| Accessor property           | `{ type: "accessor" }`; getters/setters are not invoked.                                                                            |
+| Depth/cycle boundary        | `{ type: "object" \| "array", omitted: "max depth" \| "circular" }`.                                                                |
+| Inspection failure          | `{ type: "unknown", omitted: "unavailable" }` for the whole structural summary; no exception text.                                  |
 
 Defaults retain at most 5 array entries, 12 object entries, and 3 container levels. `omitted: number` counts unvisited enumerable entries when capped. Strings contribute only length, so no string-truncation marker is needed. Structural traversal does not call `toJSON` or stringify objects. Standalone event-shape options reuse `maxDepth`, `maxArrayItems`, and `maxObjectKeys`; lifecycle entries, probes, and console capture use the defaults. Size/count metadata is still collected data, not a guarantee against all inference.
 
@@ -203,33 +202,33 @@ Logs success or failure-shaped results, including domain errors that use the pro
 
 Options include:
 
-| Option | Meaning |
-| --- | --- |
-| `message` | Message or label for the record. |
-| `summarizeErr` | Callback enrichment applied *after* automatic error metadata (additive only; cannot remove fields). |
-| `errorPolicy` | Object Summary Policy that replaces automatic error projection. See [error policy](#error-policy). |
+| Option         | Meaning                                                                                             |
+| -------------- | --------------------------------------------------------------------------------------------------- |
+| `message`      | Message or label for the record.                                                                    |
+| `summarizeErr` | Callback enrichment applied _after_ automatic error metadata (additive only; cannot remove fields). |
+| `errorPolicy`  | Object Summary Policy that replaces automatic error projection. See [error policy](#error-policy).  |
 
 ### `logError(logger, error, options?)`
 
 Projects a thrown value into minimal failure metadata. It does not translate or mutate the original error model.
 
-| Option | Meaning |
-| --- | --- |
-| `message` | Caller-supplied operational message. |
-| `level` | `"warn"`, `"error"` (default), or `"fatal"`. |
-| `status` | Explicit status for an exception or unknown value. No default HTTP status is synthesized; domain failures remain status-free, and existing Problem Details statuses are retained. |
-| `errorPolicy` | Object Summary Policy replacing the automatic error projection, including `status` inclusion. |
+| Option        | Meaning                                                                                                                                                                           |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `message`     | Caller-supplied operational message.                                                                                                                                              |
+| `level`       | `"warn"`, `"error"` (default), or `"fatal"`.                                                                                                                                      |
+| `status`      | Explicit status for an exception or unknown value. No default HTTP status is synthesized; domain failures remain status-free, and existing Problem Details statuses are retained. |
+| `errorPolicy` | Object Summary Policy replacing the automatic error projection, including `status` inclusion.                                                                                     |
 
 ### Automatic failure projection
 
 The same rules apply to `logResult` / `logger.result`, `logError` / `logger.errorResult`, invocation failures (returned `Err`, throws, rejections), and probe failures. Problem Details recognition uses `@forge-ahead/errors`' existing `isProblemDetails` predicate and takes precedence over domain-code recognition.
 
-| Input | Automatic error fields |
-| --- | --- |
-| Problem Details | Present `type` and `status`. |
-| Domain error (`{ code: string }`), including coded Error instances | `errorCode` from `code`; no synthesized HTTP status. |
-| Other Error instance | `errorName` from `name`; no synthesized HTTP status or Problem Details type. |
-| Other value | No value-derived fields; no fallback stringification. |
+| Input                                                              | Automatic error fields                                                       |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| Problem Details                                                    | Present `type` and `status`.                                                 |
+| Domain error (`{ code: string }`), including coded Error instances | `errorCode` from `code`; no synthesized HTTP status.                         |
+| Other Error instance                                               | `errorName` from `name`; no synthesized HTTP status or Problem Details type. |
+| Other value                                                        | No value-derived fields; no fallback stringification.                        |
 
 All failure projections include `outcome: "failure"`. Success-result logging remains unchanged (`ok: true`, plus explicit `summarizeOk` enrichment).
 
@@ -254,14 +253,11 @@ Existing `summarizeErr` callbacks on result logging remain additive after the se
 ### `logProbe(logger, label, valueOrThunk, options?)`
 
 Logs a bounded `debug` (default) or `trace` probe while returning the original value or promise outcome. The expression/thunk always runs, even when the requested probe level is disabled. Disabled probes do not compute summaries, policy projections, or lazy metadata. Enabled promise probes log only after settlement.
-
-| Option | Meaning |
-| --- | --- |
-| `level` | `"debug"` (default) or `"trace"`; the logger threshold must enable the selected level. |
-| `metadata` | Value or lazy callback; structural by default. |
-| `valuePolicy` | Explicit Object Summary Policy replacing the structural successful-value summary under `debugProbe.value`. |
-| `metadataPolicy` | Explicit Object Summary Policy replacing structural metadata under `debugProbe.metadata`. |
-| `errorPolicy` | Explicit replacement for the minimal failure projection under `debugProbe.error`. |
+- `level`: `"debug"` (default) or `"trace"`; the logger threshold must enable the selected level.
+- `metadata`: Value or lazy callback; structural by default.
+- `valuePolicy`: Explicit Object Summary Policy replacing the structural successful-value summary under `debugProbe.value`.
+- `metadataPolicy`: Explicit Object Summary Policy replacing structural metadata under `debugProbe.metadata`.
+- `errorPolicy`: Explicit replacement for the minimal failure projection under `debugProbe.error`.
 
 Policies reuse the existing bounds and transforms. Policy labels remain absent; review necessary fields into the policy's `fields` map rather than relying on an environment toggle. If probe-only metadata, projection, or record emission throws, that probe record is dropped, not retried or stringified; the original sync value, throw, fulfillment, or rejection is preserved.
 
@@ -287,12 +283,12 @@ Available from `@forge-ahead/logging/testing`. Returns `{ logger, records }` for
 
 ## Forge platform boundaries
 
-| Concern | Package behavior | Forge behavior |
-| --- | --- | --- |
-| Backend log collection | Emits structured records to its destination. | Collects backend function console output and exposes it through Forge logging tools. |
-| Verbosity | Resolves package levels and filters records. | Enforces platform quotas and download limits. |
-| Configuration | Reads `LOG_LEVEL` from the runtime environment. | Keeps variable values per environment; changes take effect after redeploy. |
-| Function wiring | Provides logger code only. | Manifest links modules to function handlers and resolver keys. |
+| Concern                | Package behavior                                | Forge behavior                                                                       |
+| ---------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Backend log collection | Emits structured records to its destination.    | Collects backend function console output and exposes it through Forge logging tools. |
+| Verbosity              | Resolves package levels and filters records.    | Enforces platform quotas and download limits.                                        |
+| Configuration          | Reads `LOG_LEVEL` from the runtime environment. | Keeps variable values per environment; changes take effect after redeploy.           |
+| Function wiring        | Provides logger code only.                      | Manifest links modules to function handlers and resolver keys.                       |
 
 ## Public constants
 

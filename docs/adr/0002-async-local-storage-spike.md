@@ -24,7 +24,6 @@ boundaries until we test it.
 ## Local spike
 
 A local test in Node 22 confirms that `AsyncLocalStorage`:
-
 - Preserves context after `await Promise.resolve()`.
 - Preserves context through nested async function calls.
 - Isolates concurrent invocations running under `Promise.all`.

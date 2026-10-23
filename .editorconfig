@@ -22,17 +22,24 @@ indent_size = 2
 indent_style = space
 indent_size = 2
 
-# JSON (tsconfig.json)
-[*.json]
-indent_style = space
-indent_size = 2
-
 # Resources (Static UI)
 [static/**/*.html]
 indent_style = space
 indent_size = 2
 
+# JSON (tsconfig.json and jsonc config files)
+[*.{json,jsonc}]
+indent_style = space
+indent_size = 2
+
 # Documentation (Markdown)
+# Preserve Markdown hard line breaks (two trailing spaces, allowed by MD009).
 [*.md]
+indent_style = space
+indent_size = 2
+trim_trailing_whitespace = false
+
+# Configuration
+[*.toml]
 indent_style = space
 indent_size = 2

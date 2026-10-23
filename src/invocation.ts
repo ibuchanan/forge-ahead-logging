@@ -65,7 +65,7 @@ function computeEventShape(
     }
     return {};
   }
-  if (env.FORGE_LOG_EVENT_SHAPE === "true" && isVerbose) {
+  if (env["FORGE_LOG_EVENT_SHAPE"] === "true" && isVerbose) {
     return { eventShape: summarizeShapeForLog(event, options) };
   }
   return {};
@@ -111,18 +111,20 @@ export function withForgeInvocationLogging<TEvent, TResult>(
   logger: ForgeLogger,
   event: TEvent,
   handler: (event: TEvent) => TResult | Promise<TResult>,
-  options?: ForgeInvocationLoggingOptions<TResult>,
+  options: ForgeInvocationLoggingOptions<TResult> = {},
 ): TResult | Promise<TResult> {
   const baseMetadata = summarizeForgeInvocation(event);
 
-  if (options?.logEntry) {
+  if (options.logEntry) {
     logForgeInvocation(
       logger,
       event,
       options.entryMessage ?? "invocation started",
       {
         level: options.entryLevel ?? "info",
-        includeEventShape: options.includeEventShape,
+        ...(options.includeEventShape === undefined
+          ? {}
+          : { includeEventShape: options.includeEventShape }),
       },
     );
   }
@@ -153,42 +155,34 @@ export function withForgeInvocationLogging<TEvent, TResult>(
   }
 
   function logFailure(error: unknown): never {
-    const durationMs = Date.now() - start;
-    const metadata = buildErrorMetadata(error, options);
-    Object.assign(metadata, baseMetadata, { outcome: "failure", durationMs });
-    const level = options?.errorLevel ?? "error";
-    logger[level](metadata, options?.errorMessage ?? message);
+    logResultError(error);
     throw error;
   }
 
+  function logResultError(err: unknown): void {
+    const durationMs = Date.now() - start;
+    const metadata = buildErrorMetadata(err, options);
+    Object.assign(metadata, baseMetadata, {
+      outcome: "failure",
+      durationMs,
+    });
+    const level = options?.errorLevel ?? "error";
+    logger[level](metadata, options?.errorMessage ?? message);
+  }
+
   function handleReturn(value: TResult): TResult {
+    let resultValue = value;
     if (isResult(value)) {
       if (value.isErr()) {
-        const durationMs = Date.now() - start;
-        const metadata = buildErrorMetadata(value.error, options);
-        Object.assign(metadata, baseMetadata, {
-          outcome: "failure",
-          durationMs,
-        });
-        const level = options?.errorLevel ?? "error";
-        logger[level](metadata, options?.errorMessage ?? message);
+        logResultError(value.error);
         return value;
       }
-      const resultValue = value.value as TResult;
-      const successLevel = options?.successLevel ?? "info";
-      logCompletion(
-        successLevel,
-        "success",
-        resultValue,
-        options?.successMessage ?? message,
-      );
-      return value;
+      resultValue = value.value as TResult;
     }
-    const successLevel = options?.successLevel ?? "info";
     logCompletion(
-      successLevel,
+      options?.successLevel ?? "info",
       "success",
-      value,
+      resultValue,
       options?.successMessage ?? message,
     );
     return value;

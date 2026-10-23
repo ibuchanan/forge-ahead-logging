@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { assert, describe, expect, it, vi } from "vitest";
 import {
   configureForgeLogger,
   log,
@@ -12,7 +12,7 @@ describe("configureForgeLogger", () => {
     configureForgeLogger({ name: "configured-default" });
 
     const defaultPino = unwrapPinoLogger(log);
-    expect(defaultPino.bindings().name).toBe("configured-default");
+    expect(defaultPino.bindings()["name"]).toBe("configured-default");
   });
 
   it("does not affect custom createForgeLogger instances", () => {
@@ -21,7 +21,7 @@ describe("configureForgeLogger", () => {
     configureForgeLogger({ name: "configured-default" });
 
     const customPino = unwrapPinoLogger(logger);
-    expect(customPino.bindings().name).toBeUndefined();
+    expect(customPino.bindings()["name"]).toBeUndefined();
   });
 });
 
@@ -33,9 +33,10 @@ describe("recordMetadata", () => {
 
     logger.info({ userId: "u-1" }, "hello");
 
-    const [record] = records;
-    expect(record.traceId).toBe("trace-123");
-    expect(record.userId).toBe("u-1");
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["traceId"]).toBe("trace-123");
+    expect(record["userId"]).toBe("u-1");
   });
 
   it("does not invoke the callback when the level is disabled", () => {
@@ -69,9 +70,10 @@ describe("recordMetadata", () => {
 
     logger.info({}, "hello");
 
-    const [record] = records;
-    expect(record.token).toBe("[redacted]");
-    expect(record.safe).toBe("visible");
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["token"]).toBe("[redacted]");
+    expect(record["safe"]).toBe("visible");
   });
 
   it("does not throw when the callback throws; it emits a fallback record", () => {
@@ -84,10 +86,11 @@ describe("recordMetadata", () => {
     logger.info({ userId: "u-1" }, "hello");
 
     expect(records).toHaveLength(1);
-    const [record] = records;
-    expect(record.msg).toBe("hello");
-    expect(record.userId).toBe("u-1");
-    expect(record.recordMetadataError).toBe(true);
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["msg"]).toBe("hello");
+    expect(record["userId"]).toBe("u-1");
+    expect(record["recordMetadataError"]).toBe(true);
   });
 
   it("merges with precedence: explicit > ambient > recordMetadata > base", () => {
@@ -100,8 +103,9 @@ describe("recordMetadata", () => {
       logger.info({ requestId: "explicit" }, "hello");
     });
 
-    const [record] = records;
-    expect(record.requestId).toBe("explicit");
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["requestId"]).toBe("explicit");
   });
 
   it("gives ambient context precedence over recordMetadata and base", () => {
@@ -114,8 +118,9 @@ describe("recordMetadata", () => {
       logger.info({}, "hello");
     });
 
-    const [record] = records;
-    expect(record.requestId).toBe("ambient");
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["requestId"]).toBe("ambient");
   });
 
   it("gives recordMetadata precedence over base", () => {
@@ -126,7 +131,8 @@ describe("recordMetadata", () => {
 
     logger.info({}, "hello");
 
-    const [record] = records;
-    expect(record.requestId).toBe("record");
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["requestId"]).toBe("record");
   });
 });

@@ -1,0 +1,12 @@
+{
+  "version": "0.2",
+  "language": "en",
+  "words": ["diataxis", "secretspec", "webtriggers"],
+  "ignorePaths": [
+    "node_modules/**",
+    "vendor/**",
+    ".scratch/**",
+    "dist/**",
+    "coverage/**"
+  ]
+}

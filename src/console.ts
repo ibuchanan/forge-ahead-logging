@@ -17,7 +17,7 @@ function consoleMethodForLevel(
   levelNumber: number,
 ): "error" | "warn" | "info" | "debug" {
   const label = pino.levels.labels[levelNumber];
-  return CONSOLE_METHOD_BY_LEVEL_LABEL[label] ?? "info";
+  return CONSOLE_METHOD_BY_LEVEL_LABEL[label ?? "info"] ?? "info";
 }
 
 // Set while the Forge logger is writing to `console.*`, so any installed

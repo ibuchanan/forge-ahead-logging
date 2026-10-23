@@ -307,7 +307,6 @@ Keep production output structured. Pretty mode is for local readability and shou
 ## Diagnose a missing log record
 
 Check the following in order:
-
 1. Confirm the code path runs in a backend function, not only in frontend browser code.
 2. Confirm the app was deployed after the code or variable change.
 3. Confirm `LOG_LEVEL` is not filtering the record.

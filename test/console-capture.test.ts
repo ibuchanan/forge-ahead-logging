@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, assert, describe, expect, it } from "vitest";
 import { installConsoleCapture } from "../src/index";
 import { createCapturingLogger } from "../src/testing";
 
@@ -35,8 +35,9 @@ describe("installConsoleCapture", () => {
     console.log("hello from console");
 
     expect(records).toHaveLength(1);
-    expect(records[0].msg).toBe("hello from console");
-    expect(records[0].level).toBe("info");
+    assert.isDefined(records[0]);
+    expect(records[0]["msg"]).toBe("hello from console");
+    expect(records[0]["level"]).toBe("info");
   });
 
   it("routes console.error to logger.error", () => {
@@ -46,8 +47,9 @@ describe("installConsoleCapture", () => {
     console.error("something went wrong");
 
     expect(records).toHaveLength(1);
-    expect(records[0].msg).toBe("something went wrong");
-    expect(records[0].level).toBe("error");
+    assert.isDefined(records[0]);
+    expect(records[0]["msg"]).toBe("something went wrong");
+    expect(records[0]["level"]).toBe("error");
   });
 
   it("routes console.warn and console.info to the matching logger levels", () => {
@@ -58,10 +60,12 @@ describe("installConsoleCapture", () => {
     console.info("some info");
 
     expect(records).toHaveLength(2);
-    expect(records[0].msg).toBe("a warning");
-    expect(records[0].level).toBe("warn");
-    expect(records[1].msg).toBe("some info");
-    expect(records[1].level).toBe("info");
+    assert.isDefined(records[0]);
+    expect(records[0]["msg"]).toBe("a warning");
+    expect(records[0]["level"]).toBe("warn");
+    assert.isDefined(records[1]);
+    expect(records[1]["msg"]).toBe("some info");
+    expect(records[1]["level"]).toBe("info");
   });
 
   it("reports console argument types without copying values or keys", () => {
@@ -71,9 +75,10 @@ describe("installConsoleCapture", () => {
     console.log("sensitive", { token: "secret-value", safe: "visible" });
 
     expect(records).toHaveLength(1);
-    const [record] = records;
-    expect(record.msg).toBe("sensitive");
-    expect(record.consoleArgs).toEqual({
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["msg"]).toBe("sensitive");
+    expect(record["consoleArgs"]).toEqual({
       type: "array",
       items: 1,
       values: [
@@ -87,7 +92,7 @@ describe("installConsoleCapture", () => {
         },
       ],
     });
-    expect(JSON.stringify(record.consoleArgs)).not.toMatch(
+    expect(JSON.stringify(record["consoleArgs"])).not.toMatch(
       /secret-value|visible|token|safe/,
     );
   });
@@ -99,8 +104,9 @@ describe("installConsoleCapture", () => {
     logger.info({ userId: "u-123" }, "logger message");
 
     expect(records).toHaveLength(1);
-    expect(records[0].msg).toBe("logger message");
-    expect(records[0].userId).toBe("u-123");
+    assert.isDefined(records[0]);
+    expect(records[0]["msg"]).toBe("logger message");
+    expect(records[0]["userId"]).toBe("u-123");
   });
 
   it("uninstall restores original console methods and stops capturing", () => {

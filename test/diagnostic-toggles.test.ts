@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, assert, describe, expect, it, vi } from "vitest";
 import {
   defineLogObjectSummaryPolicy,
   logForgeInvocation,
@@ -24,7 +24,7 @@ describe("FORGE_LOG_LABELS", () => {
       {},
     );
 
-    expect(result.displayName).toBeUndefined();
+    expect(result["displayName"]).toBeUndefined();
   });
 
   it("excludes labels when the env var is unset", () => {
@@ -34,7 +34,7 @@ describe("FORGE_LOG_LABELS", () => {
       {},
     );
 
-    expect(result.displayName).toBeUndefined();
+    expect(result["displayName"]).toBeUndefined();
   });
 
   it("lets explicit includeLabels override the env var", () => {
@@ -45,7 +45,7 @@ describe("FORGE_LOG_LABELS", () => {
       { includeLabels: false },
     );
 
-    expect(result.displayName).toBeUndefined();
+    expect(result["displayName"]).toBeUndefined();
   });
 });
 
@@ -65,8 +65,9 @@ describe("FORGE_LOG_EVENT_SHAPE", () => {
       FORGE_LOG_EVENT_SHAPE: "true",
     });
 
-    const [record] = records;
-    expect(record.eventShape).toBeDefined();
+    const record = records[0];
+    assert.isDefined(record);
+    assert.isDefined(record["eventShape"]);
   });
 
   it("omits event shape when env var is true but level is info", () => {
@@ -84,9 +85,10 @@ describe("FORGE_LOG_EVENT_SHAPE", () => {
       FORGE_LOG_EVENT_SHAPE: "true",
     });
 
-    const [record] = records;
-    expect(record.eventShape).toBeUndefined();
-    expect(record.eventShapeOmitted).toBeUndefined();
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["eventShape"]).toBeUndefined();
+    expect(record["eventShapeOmitted"]).toBeUndefined();
   });
 
   it("lets explicit includeEventShape override the env var", () => {
@@ -108,8 +110,9 @@ describe("FORGE_LOG_EVENT_SHAPE", () => {
       { FORGE_LOG_EVENT_SHAPE: "true" },
     );
 
-    const [record] = records;
-    expect(record.eventShape).toBeUndefined();
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["eventShape"]).toBeUndefined();
   });
 });
 

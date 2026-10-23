@@ -21,7 +21,7 @@ export const secretKeys = [
 export const secretKey = fc.mixedCase(fc.constantFrom(...secretKeys));
 
 // Unique, recognizable private payload. The prefix keeps it from colliding with log vocabulary.
-export const canary = fc
+const canary = fc
   .stringMatching(/^[0-9a-f]{12}$/)
   .map((hex) => `PRIVATE-${hex}`);
 

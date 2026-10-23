@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, assert, describe, expect, it, vi } from "vitest";
 import { configureForgeLogger, log } from "../src/index";
 import { createCapturingLogger } from "../src/testing";
 
@@ -14,8 +14,9 @@ describe("timestamp format", () => {
 
     logger.info({}, "hello");
 
-    const [record] = records;
-    expect(typeof record.time).toBe("number");
+    const record = records[0];
+    assert.isDefined(record);
+    expect(typeof record["time"]).toBe("number");
   });
 
   it("emits ISO-8601 timestamps when timestamp: 'iso' is set", () => {
@@ -23,9 +24,10 @@ describe("timestamp format", () => {
 
     logger.info({}, "hello");
 
-    const [record] = records;
-    expect(typeof record.time).toBe("string");
-    expect(record.time).toMatch(ISO_8601_PATTERN);
+    const record = records[0];
+    assert.isDefined(record);
+    expect(typeof record["time"]).toBe("string");
+    expect(record["time"]).toMatch(ISO_8601_PATTERN);
   });
 
   it("configures the default logger with ISO-8601 timestamps", () => {
@@ -34,9 +36,10 @@ describe("timestamp format", () => {
 
     log.info({}, "hello");
 
+    assert.isDefined(spy.mock.calls[0]);
     const record = JSON.parse(spy.mock.calls[0][0] as string);
-    expect(typeof record.time).toBe("string");
-    expect(record.time).toMatch(ISO_8601_PATTERN);
+    expect(typeof record["time"]).toBe("string");
+    expect(record["time"]).toMatch(ISO_8601_PATTERN);
     spy.mockRestore();
   });
 });

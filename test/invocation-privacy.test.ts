@@ -152,8 +152,8 @@ describe.each(["info", "debug", "trace"] as const)(
       expect(records).toHaveLength(10);
       expect(
         records
-          .filter((record) => record.outcome)
-          .map((record) => record.outcome),
+          .filter((record) => record["outcome"])
+          .map((record) => record["outcome"]),
       ).toEqual(["success", "success", "failure", "failure", "failure"]);
       for (const record of records) {
         expect(record).toMatchObject(expectedSummary);

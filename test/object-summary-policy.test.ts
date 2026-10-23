@@ -1,5 +1,5 @@
 import fc from "fast-check";
-import { describe, expect, it } from "vitest";
+import { assert, describe, expect, it } from "vitest";
 import {
   defineLogObjectSummaryPolicy,
   summarizeObjectForLog,
@@ -240,7 +240,8 @@ describe("reviewed policy emission", () => {
         summary: expected,
         msg: "deployment retry",
       });
-      expect(records[0].summary).toEqual(expected);
+      assert.isDefined(records[0]);
+      expect(records[0]["summary"]).toEqual(expected);
       const output = JSON.stringify(records);
       for (const excluded of [
         "review",
@@ -260,7 +261,7 @@ describe("reviewed policy emission", () => {
       expect(
         summarizeObjectForLog(value, policy, { includeLabels: true }),
       ).toEqual({ ...expected, operation: "deploy" });
-      expect(value.headers.Authorization).toBe("Bearer secret");
+      expect(value["headers"].Authorization).toBe("Bearer secret");
     },
   );
 
@@ -366,7 +367,7 @@ describe("summarizeObjectForLog", () => {
       includeLabels: true,
     });
 
-    expect(result.displayName).toBe("prod");
+    expect(result["displayName"]).toBe("prod");
   });
 });
 
@@ -379,7 +380,7 @@ describe("summarizeObjectForLog field transforms", () => {
 
     const result = summarizeObjectForLog({ secretField: "shh" }, policy);
 
-    expect(result.secretField).toBe("[redacted]");
+    expect(result["secretField"]).toBe("[redacted]");
   });
 
   it("applies omittedShape by summarizing only shape metadata", () => {
@@ -401,9 +402,9 @@ describe("summarizeObjectForLog field transforms", () => {
       policy,
     );
 
-    expect(result.body).toEqual({ omitted: true, length: 10 });
-    expect(result.headers).toEqual({ omitted: true, keys: 2 });
-    expect(result.tags).toEqual({ omitted: true, items: 3 });
+    expect(result["body"]).toEqual({ omitted: true, length: 10 });
+    expect(result["headers"]).toEqual({ omitted: true, keys: 2 });
+    expect(result["tags"]).toEqual({ omitted: true, items: 3 });
   });
 
   it("passes identity-transformed values through summarizeForLog's budgets", () => {
@@ -415,7 +416,7 @@ describe("summarizeObjectForLog field transforms", () => {
 
     const result = summarizeObjectForLog({ note: longNote }, policy);
 
-    expect(result.note).toBe(`${"x".repeat(240)}...[60 chars omitted]`);
+    expect(result["note"]).toBe(`${"x".repeat(240)}...[60 chars omitted]`);
   });
 
   it("resolves nested paths via dot-string or array path", () => {
@@ -432,7 +433,7 @@ describe("summarizeObjectForLog field transforms", () => {
       policy,
     );
 
-    expect(result.cloudId).toBe("abc");
-    expect(result.moduleKey).toBe("mod-1");
+    expect(result["cloudId"]).toBe("abc");
+    expect(result["moduleKey"]).toBe("mod-1");
   });
 });

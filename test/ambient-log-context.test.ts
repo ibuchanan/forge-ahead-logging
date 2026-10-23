@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { assert, describe, expect, it, vi } from "vitest";
 import { withLogContext } from "../src/index";
 import { createCapturingLogger } from "../src/testing";
 
@@ -10,9 +10,10 @@ describe("withLogContext", () => {
       logger.info({}, "inside scope");
     });
 
-    const [record] = records;
-    expect(record.requestId).toBe("req-1");
-    expect(record.msg).toBe("inside scope");
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["requestId"]).toBe("req-1");
+    expect(record["msg"]).toBe("inside scope");
   });
 
   it("does not merge ambient bindings outside the scope", () => {
@@ -24,9 +25,12 @@ describe("withLogContext", () => {
     });
     logger.info({}, "after scope");
 
-    expect(records[0].requestId).toBeUndefined();
-    expect(records[1].requestId).toBe("req-1");
-    expect(records[2].requestId).toBeUndefined();
+    assert.isDefined(records[0]);
+    expect(records[0]["requestId"]).toBeUndefined();
+    assert.isDefined(records[1]);
+    expect(records[1]["requestId"]).toBe("req-1");
+    assert.isDefined(records[2]);
+    expect(records[2]["requestId"]).toBeUndefined();
   });
 
   it("lets explicit per-call metadata win over ambient bindings", () => {
@@ -36,8 +40,9 @@ describe("withLogContext", () => {
       logger.info({ requestId: "req-2" }, "explicit wins");
     });
 
-    const [record] = records;
-    expect(record.requestId).toBe("req-2");
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["requestId"]).toBe("req-2");
   });
 
   it("lets ambient context win over child bindings", () => {
@@ -48,8 +53,9 @@ describe("withLogContext", () => {
       child.info({}, "ambient wins");
     });
 
-    const [record] = records;
-    expect(record.requestId).toBe("req-1");
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["requestId"]).toBe("req-1");
   });
 
   it("redacts secret-shaped ambient keys", () => {
@@ -59,8 +65,9 @@ describe("withLogContext", () => {
       logger.info({}, "redacted ambient");
     });
 
-    const [record] = records;
-    expect(record.token).toBe("[redacted]");
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["token"]).toBe("[redacted]");
   });
 
   it("isolates concurrent invocations", async () => {
@@ -76,7 +83,7 @@ describe("withLogContext", () => {
       ),
     );
 
-    const requestIds = records.map((record) => record.requestId);
+    const requestIds = records.map((record) => record["requestId"]);
     expect(requestIds).toContain("req-a");
     expect(requestIds).toContain("req-b");
     expect(requestIds).toContain("req-c");
@@ -92,9 +99,10 @@ describe("withLogContext", () => {
       });
     });
 
-    const [record] = records;
-    expect(record.requestId).toBe("inner");
-    expect(record.accountId).toBe("acc-1");
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["requestId"]).toBe("inner");
+    expect(record["accountId"]).toBe("acc-1");
   });
 
   it("returns the result of a synchronous operation", () => {
@@ -125,8 +133,10 @@ describe("createForgeLogger with ambient context", () => {
       log.info({}, "default logger with context");
     });
 
-    const record = JSON.parse(spy.mock.calls[0][0] as string);
-    expect(record.requestId).toBe("req-1");
+    const call = spy.mock.calls[0];
+    assert.isDefined(call);
+    const record = JSON.parse(call[0] as string);
+    expect(record["requestId"]).toBe("req-1");
     spy.mockRestore();
   });
 });

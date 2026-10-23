@@ -1,5 +1,5 @@
 import { err, ok, type ProblemDetails } from "@forge-ahead/errors";
-import { describe, expect, it } from "vitest";
+import { assert, describe, expect, it } from "vitest";
 import {
   type ForgeLogger,
   logError,
@@ -16,11 +16,12 @@ describe("logResult", () => {
 
     logResult(logger, ok({ id: 1, secret: "shh" }));
 
-    const [record] = records;
-    expect(record.level).toBe("debug");
-    expect(record.ok).toBe(true);
-    expect(record.id).toBeUndefined();
-    expect(record.secret).toBeUndefined();
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["level"]).toBe("debug");
+    expect(record["ok"]).toBe(true);
+    expect(record["id"]).toBeUndefined();
+    expect(record["secret"]).toBeUndefined();
   });
 
   it("merges summarizeOk metadata alongside the generic success marker", () => {
@@ -29,13 +30,14 @@ describe("logResult", () => {
     });
 
     logResult(logger, ok({ id: 1, secret: "shh" }), {
-      summarizeOk: (value) => ({ id: value.id }),
+      summarizeOk: (value) => ({ id: value["id"] }),
     });
 
-    const [record] = records;
-    expect(record.ok).toBe(true);
-    expect(record.id).toBe(1);
-    expect(record.secret).toBeUndefined();
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["ok"]).toBe(true);
+    expect(record["id"]).toBe(1);
+    expect(record["secret"]).toBeUndefined();
   });
 });
 
@@ -53,16 +55,17 @@ describe("logResult err branch", () => {
 
     logResult(logger, err(problem));
 
-    const [record] = records;
-    expect(record.level).toBe("error");
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["level"]).toBe("error");
     expect(record).toMatchObject({
       type: problem.type,
       status: problem.status,
       outcome: "failure",
     });
-    expect(record.title).toBeUndefined();
-    expect(record.detail).toBeUndefined();
-    expect(record.timestamp).toBeUndefined();
+    expect(record["title"]).toBeUndefined();
+    expect(record["detail"]).toBeUndefined();
+    expect(record["timestamp"]).toBeUndefined();
   });
 
   it("normalizes a non-ProblemDetails Error and includes errorName", () => {
@@ -71,12 +74,13 @@ describe("logResult err branch", () => {
 
     logResult(logger, err(error));
 
-    const [record] = records;
-    expect(record.status).toBeUndefined();
-    expect(record.detail).toBeUndefined();
-    expect(record.errorName).toBe("TypeError");
-    expect(record.outcome).toBe("failure");
-    expect(record.stack).toBeUndefined();
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["status"]).toBeUndefined();
+    expect(record["detail"]).toBeUndefined();
+    expect(record["errorName"]).toBe("TypeError");
+    expect(record["outcome"]).toBe("failure");
+    expect(record["stack"]).toBeUndefined();
   });
 
   it("merges summarizeErr metadata alongside approved ProblemDetails fields", () => {
@@ -86,9 +90,10 @@ describe("logResult err branch", () => {
       summarizeErr: () => ({ retryable: true }),
     });
 
-    const [record] = records;
-    expect(record.retryable).toBe(true);
-    expect(record.status).toBe(404);
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["retryable"]).toBe(true);
+    expect(record["status"]).toBe(404);
   });
 });
 
@@ -98,11 +103,12 @@ describe("logResult domain errors", () => {
 
     logResult(logger, err({ code: "invalid-seed-request" }));
 
-    const [record] = records;
-    expect(record.level).toBe("error");
-    expect(record.errorCode).toBe("invalid-seed-request");
-    expect(record.status).toBeUndefined();
-    expect(record.type).toBeUndefined();
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["level"]).toBe("error");
+    expect(record["errorCode"]).toBe("invalid-seed-request");
+    expect(record["status"]).toBeUndefined();
+    expect(record["type"]).toBeUndefined();
   });
 
   it("does not treat a numeric code as a domain error", () => {
@@ -110,10 +116,11 @@ describe("logResult domain errors", () => {
 
     logResult(logger, err({ code: 409 }));
 
-    const [record] = records;
-    expect(record.status).toBeUndefined();
-    expect(record.errorCode).toBeUndefined();
-    expect(record.outcome).toBe("failure");
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["status"]).toBeUndefined();
+    expect(record["errorCode"]).toBeUndefined();
+    expect(record["outcome"]).toBe("failure");
   });
 
   it("does not treat a string error as a domain error", () => {
@@ -121,10 +128,11 @@ describe("logResult domain errors", () => {
 
     logResult(logger, err("boom"));
 
-    const [record] = records;
-    expect(record.status).toBeUndefined();
-    expect(record.errorCode).toBeUndefined();
-    expect(record.outcome).toBe("failure");
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["status"]).toBeUndefined();
+    expect(record["errorCode"]).toBeUndefined();
+    expect(record["outcome"]).toBe("failure");
   });
 
   it("merges summarizeErr metadata alongside domain error fields", () => {
@@ -134,17 +142,18 @@ describe("logResult domain errors", () => {
       summarizeErr: () => ({ event: "seed.failed", role: "admin" }),
     });
 
-    const [record] = records;
-    expect(record.errorCode).toBe("invalid-seed-request");
-    expect(record.event).toBe("seed.failed");
-    expect(record.role).toBe("admin");
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["errorCode"]).toBe("invalid-seed-request");
+    expect(record["event"]).toBe("seed.failed");
+    expect(record["role"]).toBe("admin");
   });
 });
 
 describe("MinimalLogger type assertion", () => {
   it("is satisfied by ForgeLogger", () => {
     const _typeCheck: MinimalLogger = {} as ForgeLogger;
-    expect(_typeCheck).toBeDefined();
+    assert.isDefined(_typeCheck);
   });
 });
 
@@ -154,11 +163,12 @@ describe("logError", () => {
 
     logError(logger, "boom");
 
-    const [record] = records;
-    expect(record.level).toBe("error");
-    expect(record.status).toBeUndefined();
-    expect(record.detail).toBeUndefined();
-    expect(record.outcome).toBe("failure");
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["level"]).toBe("error");
+    expect(record["status"]).toBeUndefined();
+    expect(record["detail"]).toBeUndefined();
+    expect(record["outcome"]).toBe("failure");
   });
 });
 
@@ -170,9 +180,10 @@ describe("logger.result and logger.errorResult", () => {
 
     logger.result(ok({ id: 1 }));
 
-    const [record] = records;
-    expect(record.level).toBe("debug");
-    expect(record.ok).toBe(true);
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["level"]).toBe("debug");
+    expect(record["ok"]).toBe(true);
   });
 
   it("logger.errorResult delegates to logError", () => {
@@ -180,11 +191,12 @@ describe("logger.result and logger.errorResult", () => {
 
     logger.errorResult("boom");
 
-    const [record] = records;
-    expect(record.level).toBe("error");
-    expect(record.status).toBeUndefined();
-    expect(record.detail).toBeUndefined();
-    expect(record.outcome).toBe("failure");
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["level"]).toBe("error");
+    expect(record["status"]).toBeUndefined();
+    expect(record["detail"]).toBeUndefined();
+    expect(record["outcome"]).toBe("failure");
   });
 });
 
@@ -202,17 +214,21 @@ describe("bounded error cause chains", () => {
 
     logError(logger, root);
 
-    const [record] = records;
-    const causes = record.causes as Array<Record<string, unknown>>;
+    const record = records[0];
+    assert.isDefined(record);
+    const causes = record["causes"] as Array<Record<string, unknown>>;
     expect(causes).toHaveLength(3);
     expect(causes).toEqual([
       expect.objectContaining({ errorName: "Error", outcome: "failure" }),
       expect.objectContaining({ errorName: "Error", outcome: "failure" }),
       expect.objectContaining({ errorName: "Error", outcome: "failure" }),
     ]);
-    expect(causes[0].detail).toBeUndefined();
-    expect(causes[0].status).toBeUndefined();
-    expect(causes[0].title).toBeUndefined();
+    assert.isDefined(causes[0]);
+    expect(causes[0]["detail"]).toBeUndefined();
+    assert.isDefined(causes[0]);
+    expect(causes[0]["status"]).toBeUndefined();
+    assert.isDefined(causes[0]);
+    expect(causes[0]["title"]).toBeUndefined();
   });
 
   it("stops before a cyclic cause chain", () => {
@@ -224,8 +240,9 @@ describe("bounded error cause chains", () => {
 
     logError(logger, a);
 
-    const [record] = records;
-    const causes = record.causes as Array<Record<string, unknown>>;
+    const record = records[0];
+    assert.isDefined(record);
+    const causes = record["causes"] as Array<Record<string, unknown>>;
     expect(causes).toHaveLength(2);
     expect(causes[0]).toEqual(
       expect.objectContaining({ errorName: "Error", outcome: "failure" }),
@@ -233,8 +250,10 @@ describe("bounded error cause chains", () => {
     expect(causes[1]).toEqual(
       expect.objectContaining({ errorName: "Error", outcome: "failure" }),
     );
-    expect(causes[0].detail).toBeUndefined();
-    expect(causes[1].detail).toBeUndefined();
+    assert.isDefined(causes[0]);
+    expect(causes[0]["detail"]).toBeUndefined();
+    assert.isDefined(causes[1]);
+    expect(causes[1]["detail"]).toBeUndefined();
   });
 });
 
@@ -253,17 +272,18 @@ describe("AggregateError summary", () => {
 
     logError(logger, aggregate);
 
-    const [record] = records;
-    expect(record.errorName).toBe("AggregateError");
-    expect(record.outcome).toBe("failure");
-    expect(record.errors).toHaveLength(3);
-    expect(record.errors).toEqual([
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["errorName"]).toBe("AggregateError");
+    expect(record["outcome"]).toBe("failure");
+    expect(record["errors"]).toHaveLength(3);
+    expect(record["errors"]).toEqual([
       expect.objectContaining({ errorName: "Error", outcome: "failure" }),
       expect.objectContaining({ errorName: "Error", outcome: "failure" }),
       expect.objectContaining({ errorName: "Error", outcome: "failure" }),
     ]);
-    expect(
-      (record.errors as Array<Record<string, unknown>>)[0].detail,
-    ).toBeUndefined();
+    const firstError = (record["errors"] as Array<Record<string, unknown>>)[0];
+    assert.isDefined(firstError);
+    expect(firstError["detail"]).toBeUndefined();
   });
 });

@@ -48,6 +48,30 @@ export function summarizeShapeForLog(
   }
 }
 
+function omittedShapeEntries(
+  count: number,
+  limit: number,
+): { omitted?: number } {
+  return count > limit ? { omitted: count - limit } : {};
+}
+
+function summarizeShapeValues(
+  value: object,
+  keys: string[],
+  options: Required<LogValueSummaryOptions>,
+  depth: number,
+  seen: ReadonlySet<unknown>,
+  limit: number,
+): JSONValue[] {
+  const nextSeen = new Set(seen).add(value);
+  return keys.slice(0, limit).map((key) => {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    return descriptor && "value" in descriptor
+      ? summarizeShape(descriptor.value, options, depth + 1, nextSeen)
+      : { type: "accessor" };
+  });
+}
+
 function summarizeShape(
   value: unknown,
   options: Required<LogValueSummaryOptions>,
@@ -61,22 +85,24 @@ function summarizeShape(
   const type = Array.isArray(value) ? "array" : "object";
   if (depth >= options.maxDepth) return { type, omitted: "max depth" };
   if (seen.has(value)) return { type, omitted: "circular" };
-  const nextSeen = new Set(seen).add(value);
-  const keys = Object.keys(value);
   const limit =
     type === "array" ? options.maxArrayItems : options.maxObjectKeys;
-  const values = keys.slice(0, limit).map((key) => {
-    const descriptor = Object.getOwnPropertyDescriptor(value, key);
-    return descriptor && "value" in descriptor
-      ? summarizeShape(descriptor.value, options, depth + 1, nextSeen)
-      : { type: "accessor" };
-  });
+  const keys = Object.keys(value);
+  const values = summarizeShapeValues(value, keys, options, depth, seen, limit);
   return {
     type,
     ...(Array.isArray(value) ? { items: value.length } : { keys: keys.length }),
     values,
-    ...(keys.length > limit ? { omitted: keys.length - limit } : {}),
+    ...omittedShapeEntries(keys.length, limit),
   };
+}
+
+function summarizeSpecialType(value: unknown): string | null {
+  if (value === undefined) return "[undefined]";
+  if (typeof value === "function") return "[function]";
+  if (typeof value === "symbol") return "[symbol]";
+  if (typeof value === "bigint") return `[bigint ${value.toString()}]`;
+  return null;
 }
 
 export function summarizeValue(
@@ -92,23 +118,12 @@ export function summarizeValue(
   ) {
     return value;
   }
-  if (value === undefined) {
-    return "[undefined]";
-  }
-  if (typeof value === "function") {
-    return "[function]";
-  }
-  if (typeof value === "symbol") {
-    return "[symbol]";
-  }
-  if (typeof value === "bigint") {
-    return `[bigint ${value.toString()}]`;
-  }
+  const special = summarizeSpecialType(value);
+  if (special !== null) return special;
+
   if (typeof value === "string") {
     return summarizeString(value, options.maxStringLength);
   }
-  // Every other typeof category already returned above, so value is
-  // necessarily an array or plain object from here on.
   if (depth >= options.maxDepth) {
     return "[max depth reached]";
   }

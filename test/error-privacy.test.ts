@@ -29,7 +29,8 @@ const problemFailure = {
 const nativeFailure = Object.assign(new TypeError(privateText), {
   unknownProperty: privateText,
 });
-nativeFailure.stack = `${privateText}\n    at https://customer.example.test/${privateText}`;
+nativeFailure["stack"] =
+  `${privateText}\n    at https://customer.example.test/${privateText}`;
 const aggregateFailure = new AggregateError(
   [domainFailure, problemFailure, nativeFailure, privateText],
   privateText,
@@ -506,7 +507,7 @@ describe("automatic error privacy", () => {
       const error = new TypeError(
         "synthetic-person@example.test\n    at private customer comment",
       );
-      error.stack =
+      error["stack"] =
         "TypeError: Bearer synthetic-secret\n    at https://customer.example.test/private";
       logError(logger, error);
       logError(logger, "Bearer synthetic-secret");

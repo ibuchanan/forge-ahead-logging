@@ -50,8 +50,10 @@ function isNonBlankString(value: unknown): value is string {
 }
 
 function isValidFieldSelection(selection: unknown): boolean {
-  const path = isPolicyRecord(selection) ? selection.path : selection;
-  const transform = isPolicyRecord(selection) ? selection.transform : undefined;
+  const path = isPolicyRecord(selection) ? selection["path"] : selection;
+  const transform = isPolicyRecord(selection)
+    ? selection["transform"]
+    : undefined;
   const segments = typeof path === "string" ? path.split(".") : path;
   return (
     Array.isArray(segments) &&
@@ -63,32 +65,34 @@ function isValidFieldSelection(selection: unknown): boolean {
   );
 }
 
-function assertValidReview(review: unknown): void {
-  if (!isPolicyRecord(review)) {
-    throw new TypeError("review must be an object");
-  }
-  if (!isNonBlankString(review.purpose)) {
-    throw new TypeError("review.purpose must be a nonblank string");
-  }
-  const decision = isPolicyRecord(review.indirectIdentifiers)
-    ? review.indirectIdentifiers
-    : undefined;
+function assertValidIndirectIdentifiers(decision: unknown): void {
   if (
-    decision?.treatment !== "excluded" &&
-    decision?.treatment !== "retained"
+    !isPolicyRecord(decision) ||
+    (decision["treatment"] !== "excluded" &&
+      decision["treatment"] !== "retained")
   ) {
     throw new TypeError(
       "review.indirectIdentifiers.treatment must be excluded or retained",
     );
   }
   if (
-    decision.treatment === "retained" &&
-    !isNonBlankString(decision.justification)
+    decision["treatment"] === "retained" &&
+    !isNonBlankString(decision["justification"])
   ) {
     throw new TypeError(
       "review.indirectIdentifiers.justification must be a nonblank string when retained",
     );
   }
+}
+
+function assertValidReview(review: unknown): void {
+  if (!isPolicyRecord(review)) {
+    throw new TypeError("review must be an object");
+  }
+  if (!isNonBlankString(review["purpose"])) {
+    throw new TypeError("review.purpose must be a nonblank string");
+  }
+  assertValidIndirectIdentifiers(review["indirectIdentifiers"]);
 }
 
 function assertValidFieldMap(name: string, map: unknown): void {

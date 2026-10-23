@@ -29,10 +29,10 @@ function buildErrorMetadataSummary(
   }
   const metadata: Record<string, unknown> = { outcome: "failure" };
   if (error instanceof Error) {
-    metadata.errorName = error.name;
+    metadata["errorName"] = error.name;
   }
   if (status !== undefined) {
-    metadata.status = status;
+    metadata["status"] = status;
   }
   return metadata;
 }
@@ -62,28 +62,19 @@ export interface ErrorSummaryOptions {
   errorPolicy?: LogObjectSummaryPolicy;
 }
 
-export function buildErrorMetadata(
-  error: unknown,
-  options?: ErrorSummaryOptions,
-): Record<string, unknown> {
-  if (options?.errorPolicy) {
-    return {
-      ...summarizeObjectForLog(error, options.errorPolicy),
-      outcome: "failure",
-    };
-  }
-  const metadata = buildErrorMetadataSummary(error, options?.status);
+function causeOf(error: unknown): unknown {
+  return typeof error === "object" && error !== null && "cause" in error
+    ? error.cause
+    : undefined;
+}
 
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "cause" in error &&
-    error.cause !== undefined &&
-    error.cause !== null
-  ) {
+function buildErrorCauses(error: unknown): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  const cause = causeOf(error);
+  if (cause !== undefined && cause !== null) {
     const visited = new Set<unknown>();
     const causes: unknown[] = [];
-    let current: unknown = error.cause;
+    let current: unknown = cause;
     while (
       causes.length < MAX_CAUSE_DEPTH &&
       current !== undefined &&
@@ -96,15 +87,28 @@ export function buildErrorMetadata(
       causes.push(buildErrorMetadataSummary(current));
       current = (current as Error).cause;
     }
-    metadata.causes = causes;
+    result["causes"] = causes;
   }
-
   if (error instanceof AggregateError) {
-    metadata.errors = error.errors
+    result["errors"] = error.errors
       .slice(0, MAX_AGGREGATE_ERRORS)
       .map((nested) => buildErrorMetadataSummary(nested));
   }
+  return result;
+}
 
+export function buildErrorMetadata(
+  error: unknown,
+  options?: ErrorSummaryOptions,
+): Record<string, unknown> {
+  if (options?.errorPolicy) {
+    return {
+      ...summarizeObjectForLog(error, options.errorPolicy),
+      outcome: "failure",
+    };
+  }
+  const metadata = buildErrorMetadataSummary(error, options?.status);
+  Object.assign(metadata, buildErrorCauses(error));
   return metadata;
 }
 
@@ -122,23 +126,23 @@ export interface LogResultOptions<T, E> {
 export function logResult<T, E = ProblemDetails>(
   logger: ForgeLogger,
   result: Result<T, E>,
-  options?: LogResultOptions<T, E>,
+  options: LogResultOptions<T, E> = {},
 ): void {
   if (result.isOk()) {
-    const level = options?.successLevel ?? "debug";
+    const level = options.successLevel ?? "debug";
     const metadata: Record<string, unknown> = { ok: true };
-    if (options?.summarizeOk) {
+    if (options.summarizeOk) {
       Object.assign(metadata, options.summarizeOk(result.value));
     }
-    logger[level](metadata, options?.successMessage ?? options?.message);
+    logger[level](metadata, options.successMessage ?? options.message);
     return;
   }
-  const level = options?.errorLevel ?? "error";
+  const level = options.errorLevel ?? "error";
   const metadata = buildErrorMetadata(result.error, options);
-  if (options?.summarizeErr) {
+  if (options.summarizeErr) {
     Object.assign(metadata, options.summarizeErr(result.error));
   }
-  logger[level](metadata, options?.errorMessage ?? options?.message);
+  logger[level](metadata, options.errorMessage ?? options.message);
 }
 
 export interface LogErrorOptions {

@@ -1,5 +1,5 @@
-import type { ForgeLogger } from "./index";
-import { summarizeForLog } from "./index";
+import type { ForgeLogger } from "./index.js";
+import { summarizeForLog } from "./index.js";
 
 export interface CreateDemoNarrativeOptions {
   storyId: string;
@@ -25,7 +25,7 @@ export function createDemoNarrative(
         stepNumber,
       };
       if (metadata !== undefined) {
-        record.metadata = summarizeForLog(metadata);
+        record["metadata"] = summarizeForLog(metadata);
       }
       logger.info(record, message);
     },

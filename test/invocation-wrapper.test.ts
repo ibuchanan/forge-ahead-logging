@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
 import { err, ok } from "@forge-ahead/errors";
-import { createCapturingLogger } from "../src/testing";
+import { assert, describe, expect, it } from "vitest";
 import { withLogContext } from "../src/index";
+import { createCapturingLogger } from "../src/testing";
 
 describe("withForgeInvocationLogging", () => {
   it("logs completion with duration and success outcome for a sync handler", async () => {
@@ -17,14 +17,15 @@ describe("withForgeInvocationLogging", () => {
     );
 
     expect(result).toEqual({ ok: true });
-    const [record] = records;
-    expect(record.level).toBe("info");
-    expect(record.msg).toBe("completed");
-    expect(record.outcome).toBe("success");
-    expect(record.eventType).toBe("avi:jira:created:issue");
-    expect(record.requestId).toBe("req-1");
-    expect(typeof record.durationMs).toBe("number");
-    expect(record.durationMs).toBeGreaterThanOrEqual(0);
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["level"]).toBe("info");
+    expect(record["msg"]).toBe("completed");
+    expect(record["outcome"]).toBe("success");
+    expect(record["eventType"]).toBe("avi:jira:created:issue");
+    expect(record["requestId"]).toBe("req-1");
+    expect(typeof record["durationMs"]).toBe("number");
+    expect(record["durationMs"]).toBeGreaterThanOrEqual(0);
   });
 
   it("logs completion with duration and success outcome for an async handler", async () => {
@@ -38,9 +39,10 @@ describe("withForgeInvocationLogging", () => {
     });
 
     expect(result).toBe("done");
-    const [record] = records;
-    expect(record.outcome).toBe("success");
-    expect(record.durationMs).toBeGreaterThanOrEqual(0);
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["outcome"]).toBe("success");
+    expect(record["durationMs"]).toBeGreaterThanOrEqual(0);
   });
 
   it("logs and rethrows a sync thrown error", async () => {
@@ -56,13 +58,14 @@ describe("withForgeInvocationLogging", () => {
     ).toThrow(error);
 
     expect(records).toHaveLength(1);
-    const [record] = records;
-    expect(record.level).toBe("error");
-    expect(record.outcome).toBe("failure");
-    expect(record.errorName).toBe("Error");
-    expect(record.title).toBeUndefined();
-    expect(record.status).toBeUndefined();
-    expect(record.detail).toBeUndefined();
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["level"]).toBe("error");
+    expect(record["outcome"]).toBe("failure");
+    expect(record["errorName"]).toBe("Error");
+    expect(record["title"]).toBeUndefined();
+    expect(record["status"]).toBeUndefined();
+    expect(record["detail"]).toBeUndefined();
   });
 
   it("logs and rethrows an async rejection", async () => {
@@ -77,10 +80,11 @@ describe("withForgeInvocationLogging", () => {
       }),
     ).rejects.toThrow(error);
 
-    const [record] = records;
-    expect(record.outcome).toBe("failure");
-    expect(record.errorName).toBe("Error");
-    expect(record.detail).toBeUndefined();
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["outcome"]).toBe("failure");
+    expect(record["errorName"]).toBe("Error");
+    expect(record["detail"]).toBeUndefined();
   });
 
   it("classifies an Err Result as failure", async () => {
@@ -99,12 +103,13 @@ describe("withForgeInvocationLogging", () => {
       withForgeInvocationLogging(logger, event, async () => result),
     ).resolves.toBe(result);
 
-    const [record] = records;
-    expect(record.outcome).toBe("failure");
-    expect(record.type).toBe("https://example.com/bad");
-    expect(record.status).toBe(400);
-    expect(record.detail).toBeUndefined();
-    expect(record.title).toBeUndefined();
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["outcome"]).toBe("failure");
+    expect(record["type"]).toBe("https://example.com/bad");
+    expect(record["status"]).toBe(400);
+    expect(record["detail"]).toBeUndefined();
+    expect(record["title"]).toBeUndefined();
   });
 
   it("classifies an Ok Result as success", async () => {
@@ -117,8 +122,9 @@ describe("withForgeInvocationLogging", () => {
     );
 
     expect(result.isOk()).toBe(true);
-    const [record] = records;
-    expect(record.outcome).toBe("success");
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["outcome"]).toBe("success");
   });
 
   it("logs entry when opt-in", async () => {
@@ -132,12 +138,15 @@ describe("withForgeInvocationLogging", () => {
     });
 
     expect(records).toHaveLength(2);
-    const [entry, completion] = records;
-    expect(entry.level).toBe("info");
-    expect(entry.msg).toBe("entry");
-    expect(entry.eventType).toBe("avi:jira:created:issue");
-    expect(completion.msg).toBe("invocation completed");
-    expect(completion.outcome).toBe("success");
+    const entry = records[0];
+    const completion = records[1];
+    assert.isDefined(entry);
+    assert.isDefined(completion);
+    expect(entry["level"]).toBe("info");
+    expect(entry["msg"]).toBe("entry");
+    expect(entry["eventType"]).toBe("avi:jira:created:issue");
+    expect(completion["msg"]).toBe("invocation completed");
+    expect(completion["outcome"]).toBe("success");
   });
 
   it("omits entry when opt-in but level is disabled", async () => {
@@ -154,7 +163,8 @@ describe("withForgeInvocationLogging", () => {
     });
 
     expect(records).toHaveLength(1);
-    expect(records[0].msg).toBe("invocation completed");
+    assert.isDefined(records[0]);
+    expect(records[0]["msg"]).toBe("invocation completed");
   });
 
   it("inherits ambient log context inside the handler", async () => {
@@ -168,8 +178,9 @@ describe("withForgeInvocationLogging", () => {
       }),
     );
 
-    const entry = records.find((r) => r.msg === "inside handler");
-    expect(entry?.requestId).toBe("ambient-1");
+    const entry = records.find((r) => r["msg"] === "inside handler");
+    assert.isDefined(entry);
+    expect(entry["requestId"]).toBe("ambient-1");
   });
 
   it("supports logger.invocation as a convenience method", async () => {
@@ -181,9 +192,10 @@ describe("withForgeInvocationLogging", () => {
     });
 
     expect(result).toBe("done");
-    const [record] = records;
-    expect(record.outcome).toBe("success");
-    expect(record.msg).toBe("done");
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["outcome"]).toBe("success");
+    expect(record["msg"]).toBe("done");
   });
 
   it("applies summarizeResult on success", async () => {
@@ -196,13 +208,14 @@ describe("withForgeInvocationLogging", () => {
       event,
       async () => ({ id: "123", count: 7 }),
       {
-        summarizeResult: (value) => ({ resultId: value.id }),
+        summarizeResult: (value) => ({ resultId: value["id"] }),
       },
     );
 
-    const [record] = records;
-    expect(record.outcome).toBe("success");
-    expect(record.resultId).toBe("123");
-    expect(record.count).toBeUndefined();
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["outcome"]).toBe("success");
+    expect(record["resultId"]).toBe("123");
+    expect(record["count"]).toBeUndefined();
   });
 });

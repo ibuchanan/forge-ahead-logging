@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { assert, describe, expect, it } from "vitest";
 import { createCapturingLogger } from "../src/testing";
 
 describe("message formatting", () => {
@@ -7,9 +7,10 @@ describe("message formatting", () => {
 
     logger.info({ userId: "u-1" }, "Created user %s", "u-1");
 
-    const [record] = records;
-    expect(record.msg).toBe("Created user u-1");
-    expect(record.userId).toBe("u-1");
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["msg"]).toBe("Created user u-1");
+    expect(record["userId"]).toBe("u-1");
   });
 
   it("formats a numeric placeholder with extra arguments", () => {
@@ -17,8 +18,9 @@ describe("message formatting", () => {
 
     logger.info({}, "Count: %d", 42);
 
-    const [record] = records;
-    expect(record.msg).toBe("Count: 42");
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["msg"]).toBe("Count: 42");
   });
 
   it("formats a JSON placeholder with extra arguments", () => {
@@ -26,8 +28,9 @@ describe("message formatting", () => {
 
     logger.info({}, "Object: %j", { foo: "bar" });
 
-    const [record] = records;
-    expect(record.msg).toBe('Object: {"foo":"bar"}');
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["msg"]).toBe('Object: {"foo":"bar"}');
   });
 
   it("supports extra arguments on all seven level methods", () => {
@@ -43,12 +46,18 @@ describe("message formatting", () => {
     logger.trace({}, "trace %s", "six");
 
     expect(records).toHaveLength(6);
-    expect(records[0].msg).toBe("fatal one");
-    expect(records[1].msg).toBe("error two");
-    expect(records[2].msg).toBe("warn three");
-    expect(records[3].msg).toBe("info four");
-    expect(records[4].msg).toBe("debug five");
-    expect(records[5].msg).toBe("trace six");
+    assert.isDefined(records[0]);
+    expect(records[0]["msg"]).toBe("fatal one");
+    assert.isDefined(records[1]);
+    expect(records[1]["msg"]).toBe("error two");
+    assert.isDefined(records[2]);
+    expect(records[2]["msg"]).toBe("warn three");
+    assert.isDefined(records[3]);
+    expect(records[3]["msg"]).toBe("info four");
+    assert.isDefined(records[4]);
+    expect(records[4]["msg"]).toBe("debug five");
+    assert.isDefined(records[5]);
+    expect(records[5]["msg"]).toBe("trace six");
   });
 
   it("supports message-only calls with extra arguments", () => {
@@ -56,7 +65,8 @@ describe("message formatting", () => {
 
     logger.info("Hello %s", "world");
 
-    const [record] = records;
-    expect(record.msg).toBe("Hello world");
+    const record = records[0];
+    assert.isDefined(record);
+    expect(record["msg"]).toBe("Hello world");
   });
 });

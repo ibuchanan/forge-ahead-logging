@@ -51,7 +51,6 @@ Forge logging has limits on lines and bytes per invocation.
 Rich Atlassian payloads can contain
 nested objects, arrays, descriptions, account information, tokens, and error causes.
 Logging such a payload unchanged creates three risks at once:
-
 1. the record may exceed the platform’s available log budget;
 2. sensitive values may be copied into operational systems;
 3. the useful signal may be buried inside irrelevant payload detail.
@@ -177,7 +176,6 @@ a logging threshold should remain inspectable and easy to manage.
 ## The practical design rule
 
 Log the smallest record that lets an operator answer the next question:
-
 - Which invocation was this?
 - What operation was attempted?
 - What stable domain identity was involved?

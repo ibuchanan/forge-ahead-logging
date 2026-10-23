@@ -1,6 +1,6 @@
 import { err } from "@forge-ahead/errors";
 import fc from "fast-check";
-import { describe, expect, it, vi } from "vitest";
+import { assert, describe, expect, it, vi } from "vitest";
 import { logError } from "../src/index";
 import { createCapturingLogger } from "../src/testing";
 
@@ -55,6 +55,39 @@ function makeFailure({
   return { error, summary: { ...summary, outcome: "failure" } };
 }
 
+function makeCauseChain(
+  descriptions: Parameters<typeof makeFailure>[0][],
+  cycle: number | undefined,
+) {
+  const nodes = descriptions.map(makeFailure);
+  const first = nodes[0];
+  assert.isDefined(first);
+  let previous = first;
+  for (const node of nodes.slice(1)) {
+    previous.error.cause = node.error;
+    previous = node;
+  }
+  const target = cycle === undefined ? undefined : cycle % nodes.length;
+  if (target !== undefined) {
+    const targetNode = nodes[target];
+    assert.isDefined(targetNode);
+    previous.error.cause = targetNode.error;
+  }
+  for (const { error } of nodes) Object.freeze(error);
+  return { nodes, first, target };
+}
+
+function expectCauseChainUnchanged(
+  nodes: ReturnType<typeof makeFailure>[],
+  target: number | undefined,
+): void {
+  for (const [index, node] of nodes.entries()) {
+    const next =
+      nodes[index + 1] ?? (target === undefined ? undefined : nodes[target]);
+    expect(node.error.cause).toBe(next?.error);
+  }
+}
+
 const boundaryFailures = (
   ["native", "domain", "problem", "aggregate", "unknown"] as const
 ).map((kind) => ({
@@ -62,6 +95,10 @@ const boundaryFailures = (
   text: "boundary",
   unexpectedEvidence: null,
 }));
+const firstBoundaryFailure = boundaryFailures[0];
+const aggregateBoundaryFailure = boundaryFailures[3];
+assert.isDefined(firstBoundaryFailure);
+assert.isDefined(aggregateBoundaryFailure);
 
 describe("generated error trees", () => {
   it("bounds mixed cause chains and cycles without leaking payloads or replacing failures", async () => {
@@ -71,23 +108,16 @@ describe("generated error trees", () => {
         fc.option(fc.nat({ max: 11 }), { nil: undefined }),
         fc.constantFrom("info", "debug", "trace"),
         async (descriptions, cycle, level) => {
-          const nodes = descriptions.map(makeFailure);
-          for (let index = 0; index < nodes.length - 1; index++) {
-            nodes[index].error.cause = nodes[index + 1].error;
-          }
-          const target = cycle === undefined ? undefined : cycle % nodes.length;
-          if (target !== undefined)
-            nodes[nodes.length - 1].error.cause = nodes[target].error;
-          for (const { error } of nodes) Object.freeze(error);
+          const { nodes, first, target } = makeCauseChain(descriptions, cycle);
           const { logger, records } = createCapturingLogger({
             env: { LOG_LEVEL: level },
           });
-          const root = nodes[0].error;
+          const root = first.error;
           // A root-linked cycle may include the root once; other cycles revisit an already-seen cause.
           const reachable = nodes.slice(1).map(({ summary }) => summary);
-          if (target === 0) reachable.push(nodes[0].summary);
+          if (target === 0) reachable.push(first.summary);
           const expected = {
-            ...nodes[0].summary,
+            ...first.summary,
             ...(root instanceof AggregateError
               ? { errors: [{ errorName: "Error", outcome: "failure" }] }
               : {}),
@@ -128,18 +158,13 @@ describe("generated error trees", () => {
             })),
           ]);
           expect(JSON.stringify(records)).not.toContain("private-payload:");
-          for (let index = 0; index < nodes.length - 1; index++) {
-            expect(nodes[index].error.cause).toBe(nodes[index + 1].error);
-          }
-          expect(nodes[nodes.length - 1].error.cause).toBe(
-            target === undefined ? undefined : nodes[target].error,
-          );
+          expectCauseChainUnchanged(nodes, target);
         },
       ),
       {
         examples: [
-          [[boundaryFailures[0]], undefined, "info"],
-          [[boundaryFailures[0]], 0, "trace"],
+          [[firstBoundaryFailure], undefined, "info"],
+          [[firstBoundaryFailure], 0, "trace"],
           [boundaryFailures.slice(0, 2), 0, "debug"],
           [boundaryFailures.slice(0, 3), 1, "trace"],
           [boundaryFailures.slice(0, 4), undefined, "info"],
@@ -198,7 +223,7 @@ describe("generated error trees", () => {
           [[], "empty", "info"],
           [boundaryFailures.slice(0, 3), "exact limit", "debug"],
           [boundaryFailures, "over limit", "trace"],
-          [[boundaryFailures[3]], "nested aggregate", "trace"],
+          [[aggregateBoundaryFailure], "nested aggregate", "trace"],
         ],
       },
     );
