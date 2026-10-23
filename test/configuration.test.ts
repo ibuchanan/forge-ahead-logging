@@ -15,6 +15,14 @@ describe("configureForgeLogger", () => {
     expect(defaultPino.bindings()["name"]).toBe("configured-default");
   });
 
+  it("makes the default logger follow every reconfiguration", () => {
+    configureForgeLogger({ name: "first" });
+    expect(unwrapPinoLogger(log).bindings()["name"]).toBe("first");
+
+    configureForgeLogger({ name: "second" });
+    expect(unwrapPinoLogger(log).bindings()["name"]).toBe("second");
+  });
+
   it("does not affect custom createForgeLogger instances", () => {
     const { logger } = createCapturingLogger();
 
@@ -25,7 +33,35 @@ describe("configureForgeLogger", () => {
   });
 });
 
+describe("unwrapPinoLogger", () => {
+  it("rejects loggers that were not created by createForgeLogger", () => {
+    const impostor = {
+      info() {},
+      child() {
+        return impostor;
+      },
+    };
+
+    expect(() => unwrapPinoLogger(impostor as unknown as typeof log)).toThrow(
+      "Expected a ForgeLogger created by createForgeLogger().",
+    );
+  });
+});
+
 describe("recordMetadata", () => {
+  it("is inherited by child loggers", () => {
+    const { logger, records } = createCapturingLogger({
+      recordMetadata: () => ({ traceId: "trace-123" }),
+    });
+
+    logger.child({ scope: "child" }).child({ scope: "grandchild" }).info("hi");
+
+    expect(records[0]).toMatchObject({
+      traceId: "trace-123",
+      scope: "grandchild",
+    });
+  });
+
   it("merges per-record metadata into emitted records", () => {
     const { logger, records } = createCapturingLogger({
       recordMetadata: () => ({ traceId: "trace-123" }),
