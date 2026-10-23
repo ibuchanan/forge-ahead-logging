@@ -1,4 +1,4 @@
-import { buildErrorMetadata } from "./errors.js";
+import { buildErrorMetadata, type ErrorPolicyOption } from "./errors.js";
 import {
   type LogObjectSummaryPolicy,
   summarizeObjectForLog,
@@ -10,7 +10,7 @@ import type { LogLevelMethods } from "./types.js";
 export type DebugProbeLevel = "debug" | "trace";
 
 /** Probe diagnostics are structural unless an application explicitly selects values. */
-export interface LogProbeOptions {
+export interface LogProbeOptions extends ErrorPolicyOption {
   level?: DebugProbeLevel;
   /** Structural by default; lazy callbacks run only when the requested level is enabled. */
   metadata?: unknown | (() => unknown);
@@ -18,7 +18,6 @@ export interface LogProbeOptions {
   valuePolicy?: LogObjectSummaryPolicy;
   /** Reviewed projection replacing structural probe-only metadata. */
   metadataPolicy?: LogObjectSummaryPolicy;
-  errorPolicy?: LogObjectSummaryPolicy;
 }
 
 function resolveProbeMetadata(

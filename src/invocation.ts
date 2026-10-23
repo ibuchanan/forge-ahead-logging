@@ -1,8 +1,7 @@
 import type { Result } from "@forge-ahead/errors";
-import { buildErrorMetadata } from "./errors.js";
+import { buildErrorMetadata, type ErrorPolicyOption } from "./errors.js";
 import {
   defineLogObjectSummaryPolicy,
-  type LogObjectSummaryPolicy,
   summarizeObjectForLog,
 } from "./policy.js";
 import { isPromiseLike } from "./promise.js";
@@ -84,7 +83,7 @@ export function logForgeInvocation(
   logger[level](summary, message);
 }
 
-export interface ForgeInvocationLoggingOptions<T> {
+export interface ForgeInvocationLoggingOptions<T> extends ErrorPolicyOption {
   logEntry?: boolean;
   entryLevel?: "debug" | "info";
   entryMessage?: string;
@@ -95,7 +94,6 @@ export interface ForgeInvocationLoggingOptions<T> {
   successMessage?: string;
   errorMessage?: string;
   summarizeResult?: (result: T) => Record<string, unknown>;
-  errorPolicy?: LogObjectSummaryPolicy;
 }
 
 function isResult(value: unknown): value is Result<unknown, unknown> {

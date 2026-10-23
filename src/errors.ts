@@ -36,12 +36,15 @@ function isDomainError(error: unknown): error is { code: string } {
   );
 }
 
-/** Per-call-site error summarizing choices shared by every error-logging option type. */
-export interface ErrorSummaryOptions {
-  /** Status to report for errors that do not carry their own. */
-  status?: number;
+/** The error-summary choice shared by every error-logging option type. */
+export interface ErrorPolicyOption {
   /** Reviewed projection replacing the structural error summary. */
   errorPolicy?: LogObjectSummaryPolicy;
+}
+
+export interface ErrorSummaryOptions extends ErrorPolicyOption {
+  /** Status to report for errors that do not carry their own. */
+  status?: number;
 }
 
 function causeOf(error: unknown): unknown {
@@ -89,7 +92,7 @@ export function buildErrorMetadata(
   return metadata;
 }
 
-export interface LogResultOptions<T, E> {
+export interface LogResultOptions<T, E> extends ErrorPolicyOption {
   message?: string;
   successMessage?: string;
   errorMessage?: string;
@@ -97,7 +100,6 @@ export interface LogResultOptions<T, E> {
   errorLevel?: "warn" | "error";
   summarizeOk?: (value: T) => Record<string, unknown>;
   summarizeErr?: (error: E) => Record<string, unknown>;
-  errorPolicy?: LogObjectSummaryPolicy;
 }
 
 export function logResult<T, E = ProblemDetails>(
@@ -122,11 +124,9 @@ export function logResult<T, E = ProblemDetails>(
   logger[level](metadata, options.errorMessage ?? options.message);
 }
 
-export interface LogErrorOptions {
+export interface LogErrorOptions extends ErrorSummaryOptions {
   message?: string;
   level?: "warn" | "error" | "fatal";
-  status?: number;
-  errorPolicy?: LogObjectSummaryPolicy;
 }
 
 export function logError(
