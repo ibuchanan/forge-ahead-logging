@@ -186,9 +186,8 @@ export const FORGE_EVENT_SUMMARY_POLICY = defineLogObjectSummaryPolicy({
 export function summarizeForgeInvocation(
   event: unknown,
   options?: LogValueSummaryOptions,
-  env: Record<string, string | undefined> = process.env,
 ): Record<string, unknown> {
-  return summarizeObjectForLog(event, FORGE_EVENT_SUMMARY_POLICY, options, env);
+  return summarizeObjectForLog(event, FORGE_EVENT_SUMMARY_POLICY, options);
 }
 
 export interface ForgeInvocationLogOptions extends LogValueSummaryOptions {
@@ -228,7 +227,7 @@ export function logForgeInvocation(
   options?: ForgeInvocationLogOptions,
   env: Record<string, string | undefined> = process.env,
 ): void {
-  const summary = summarizeForgeInvocation(event, options, env);
+  const summary = summarizeForgeInvocation(event, options);
   Object.assign(summary, computeEventShape(logger, event, options, env));
   const level = options?.level ?? "info";
   logger[level](summary, message);

@@ -69,7 +69,7 @@ Use the wrapper at the boundary where the event enters your application. Avoid w
 ## Migrate from the previous invocation summary
 
 1. Update consumers, dashboards, and assertions that expected `path`, `cloudId`, `queryParameters`, or `contextToken`. Those fields are now absent, not replaced with previews or placeholders. For example, `{ method: "POST", path: "/private", context: { cloudId: "customer" }, contextToken: "secret" }` now produces `{ kind: "forgeEvent", method: "POST" }`.
-2. Remove authorization-token previews from custom policies. Omit authorization fields or use `transform: "redact"` when presence matters. Do not use `tokenPreview` for authorization data; it remains a value-revealing compatibility transform, not a safe migration option.
+2. Remove authorization-token previews from custom policies. Omit authorization fields or use `transform: "redact"` when presence matters.
 3. If routing is needed, supply an app-controlled route template explicitly. Do not derive it from an arbitrary request path or URL:
 
    ```ts
@@ -228,7 +228,7 @@ Prefer an allow-list policy for recurring records. Do not treat the default reda
 ## Migrate and review Object Summary Policies (breaking change)
 
 1. Define application policies with `defineLogObjectSummaryPolicy` at module initialization or configuration startup, before handling requests. Pass existing policy objects through the helper too; direct literals passed only to `summarizeObjectForLog` are not validated. Keep definitions unchanged after validation.
-2. Resolve definition errors before enabling logging. Supply a nonblank `kind`, valid field maps, nonempty source paths/segments, and one of the documented transforms. Replace previously accepted identity/`tokenPreview` selections of recognized secret paths with omission, `redact`, or justified `omittedShape` metadata. Renaming the output alias does not bypass source-path validation:
+2. Resolve definition errors before enabling logging. Supply a nonblank `kind`, valid field maps, nonempty source paths/segments, and one of the documented transforms. Replace previously accepted identity selections of recognized secret paths with omission, `redact`, or justified `omittedShape` metadata. Renaming the output alias does not bypass source-path validation:
 
    ```ts
    const credentialPresencePolicy = defineLogObjectSummaryPolicy({

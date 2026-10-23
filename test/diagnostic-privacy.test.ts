@@ -170,16 +170,16 @@ describe("explicit label projection", () => {
         labels: { name: "name", display: "customerText" },
       });
       const value = { id: 7, name: "sync", customerText: privateText };
-      const env = { FORGE_LOG_LABELS: labels };
-      expect(summarizeObjectForLog(value, policy, {}, env)).toEqual({
+      if (labels !== undefined) vi.stubEnv("FORGE_LOG_LABELS", labels);
+      expect(summarizeObjectForLog(value, policy, {})).toEqual({
         kind: "operation",
         id: 7,
       });
       expect(
-        summarizeObjectForLog(value, policy, { includeLabels: false }, env),
+        summarizeObjectForLog(value, policy, { includeLabels: false }),
       ).toEqual({ kind: "operation", id: 7 });
       expect(
-        summarizeObjectForLog(value, policy, { includeLabels: true }, env),
+        summarizeObjectForLog(value, policy, { includeLabels: true }),
       ).toEqual({
         kind: "operation",
         id: 7,

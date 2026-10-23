@@ -117,7 +117,7 @@ Validates a reusable allow-list projection for a domain object at definition tim
 
 A selection is a dot-separated string path, a nonempty array of literal string segments, or `{ path, transform? }`. Segments must be nonblank; empty paths/segments and unknown transforms are rejected. Omitted/`undefined` transforms mean `identity`. Maps and metadata must be non-null, non-array objects. Validation does not trim or rewrite definitions.
 
-**Source-path validation:** any path segment matching the case-insensitive [recognized secret-shaped keys](#default-redaction-backstop) may use only `redact` or `omittedShape`; implicit/explicit `identity` and `tokenPreview` are rejected. Both `fields` and `labels` are checked, including aliases, array paths, and paths descending through a recognized secret key. Diagnostics identify the source path, not just the output alias. A purpose or retention justification does not override this rule.
+**Source-path validation:** any path segment matching the case-insensitive [recognized secret-shaped keys](#default-redaction-backstop) may use only `redact` or `omittedShape`; implicit/explicit `identity` is rejected. Both `fields` and `labels` are checked, including aliases, array paths, and paths descending through a recognized secret key. Diagnostics identify the source path, not just the output alias. A purpose or retention justification does not override this rule.
 
 **Review boundary:** metadata documents an application decision, not automatic classification. Validation checks shape, nonblank explanations, supported transforms, and recognized source names only. It cannot determine whether arbitrary strings/custom domain fields contain personal data or credentials, whether `excluded` is truthful, or whether a justification is sufficient. Generic `id`/`name` fields are neither automatically forbidden nor declared safe. Selecting a parent object with `identity` still permits its ordinary nested values within the existing bounds and key-based redaction.
 
@@ -127,7 +127,7 @@ A selection is a dot-separated string path, a nonempty array of literal string s
 
 ### `summarizeObjectForLog(value, policy, options?)`
 
-Projects and summarizes an object according to a `LogObjectSummaryPolicy`. `fields` are explicit application selections; `labels` are selected only with `includeLabels: true` at the call site. `FORGE_LOG_LABELS` no longer enables labels (the optional environment argument remains accepted for compatibility). Both maps require application review; generic names such as `name` or `id` do not establish sensitivity or safety. Selecting an object with `identity` can retain its nested keys and values within the normal bounds.
+Projects and summarizes an object according to a `LogObjectSummaryPolicy`. `fields` are explicit application selections; `labels` are selected only with `includeLabels: true` at the call site. `FORGE_LOG_LABELS` no longer enables labels. Both maps require application review; generic names such as `name` or `id` do not establish sensitivity or safety. Selecting an object with `identity` can retain its nested keys and values within the normal bounds.
 
 ### Built-in transforms
 
@@ -138,9 +138,6 @@ Projects and summarizes an object according to a `LogObjectSummaryPolicy`. `fiel
 | `identity` (default) | The selected value passed through the bounded value summarizer. |
 | `redact` | `[redacted]` for a present field. |
 | `omittedShape` | `{ omitted: true }`, plus `length` for strings, `items` for arrays, or `keys` for objects; no field names or values are copied. |
-| `tokenPreview` (deprecated for authorization data) | Compatibility only: the first three and last three characters of a string, separated by `...`; non-strings become `[redacted]`. Short strings can expose the entire value. A preview is not safe authorization-data logging. |
-
-`tokenPreview` remains accepted for non-secret source paths for compatibility but is not used by the built-in Forge event policy. Definition-time validation rejects it on recognized secret source paths even under a harmless output alias. Omit authorization data, fully redact it, or select only `omittedShape` presence/size metadata where needed. There is no `preview` transform.
 
 ## Forge event logging
 

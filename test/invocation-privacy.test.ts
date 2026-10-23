@@ -64,11 +64,10 @@ describe.each(["info", "debug", "trace"] as const)(
   "built-in invocation privacy at %s logger threshold",
   (level) => {
     it("minimizes standalone summaries and the exported Object Summary Policy", () => {
-      const summary = summarizeForgeInvocation(
-        event,
-        { maxDepth: 10, maxStringLength: 10000 },
-        { LOG_LEVEL: level, FORGE_LOG_LABELS: "true" },
-      );
+      const summary = summarizeForgeInvocation(event, {
+        maxDepth: 10,
+        maxStringLength: 10000,
+      });
       expect(summary).toEqual(expectedSummary);
       expectMinimized(summary);
       expect(summarizeObjectForLog(event, FORGE_EVENT_SUMMARY_POLICY)).toEqual(

@@ -129,7 +129,6 @@ describe("policy source-path validation", () => {
             path,
             { path },
             { path, transform: "identity" },
-            { path, transform: "tokenPreview" },
           ] as const) {
             expect(() =>
               defineLogObjectSummaryPolicy({
@@ -233,9 +232,7 @@ describe("reviewed policy emission", () => {
       };
 
       expect(defineLogObjectSummaryPolicy(policy)).toBe(policy);
-      const summary = summarizeObjectForLog(value, policy, undefined, {
-        FORGE_LOG_LABELS: "true",
-      });
+      const summary = summarizeObjectForLog(value, policy);
       expect(summary).toEqual(expected);
       logger.info({ summary }, "deployment retry");
       expect(records).toHaveLength(1);
@@ -383,33 +380,6 @@ describe("summarizeObjectForLog field transforms", () => {
     const result = summarizeObjectForLog({ secretField: "shh" }, policy);
 
     expect(result.secretField).toBe("[redacted]");
-  });
-
-  it("applies tokenPreview to a string by keeping the first and last three characters", () => {
-    const policy = defineLogObjectSummaryPolicy({
-      kind: "widget",
-      fields: {
-        operationCode: { path: "operationCode", transform: "tokenPreview" },
-      },
-    });
-
-    const result = summarizeObjectForLog(
-      { operationCode: "1234567890" },
-      policy,
-    );
-
-    expect(result.operationCode).toBe("123...890");
-  });
-
-  it("applies tokenPreview as redaction for non-string present values", () => {
-    const policy = defineLogObjectSummaryPolicy({
-      kind: "widget",
-      fields: { count: { path: "count", transform: "tokenPreview" } },
-    });
-
-    const result = summarizeObjectForLog({ count: 42 }, policy);
-
-    expect(result.count).toBe("[redacted]");
   });
 
   it("applies omittedShape by summarizing only shape metadata", () => {

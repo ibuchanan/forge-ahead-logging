@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   defineLogObjectSummaryPolicy,
   logForgeInvocation,
@@ -14,12 +14,14 @@ const policyWithLabels = defineLogObjectSummaryPolicy({
 });
 
 describe("FORGE_LOG_LABELS", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
   it("does not authorize value-bearing labels from the env var alone", () => {
+    vi.stubEnv("FORGE_LOG_LABELS", "true");
     const result = summarizeObjectForLog(
       { id: 1, displayName: "Test" },
       policyWithLabels,
       {},
-      { FORGE_LOG_LABELS: "true" },
     );
 
     expect(result.displayName).toBeUndefined();
@@ -30,18 +32,17 @@ describe("FORGE_LOG_LABELS", () => {
       { id: 1, displayName: "Test" },
       policyWithLabels,
       {},
-      {},
     );
 
     expect(result.displayName).toBeUndefined();
   });
 
   it("lets explicit includeLabels override the env var", () => {
+    vi.stubEnv("FORGE_LOG_LABELS", "true");
     const result = summarizeObjectForLog(
       { id: 1, displayName: "Test" },
       policyWithLabels,
       { includeLabels: false },
-      { FORGE_LOG_LABELS: "true" },
     );
 
     expect(result.displayName).toBeUndefined();

@@ -6,12 +6,7 @@ import {
 } from "./summarize.js";
 
 export type LogFieldPath = string | readonly string[];
-export type LogFieldTransform =
-  | "identity"
-  | "redact"
-  /** @deprecated Do not preview authorization data. Use redact or omit the field. */
-  | "tokenPreview"
-  | "omittedShape";
+export type LogFieldTransform = "identity" | "redact" | "omittedShape";
 
 export type LogFieldSelection =
   | LogFieldPath
@@ -48,7 +43,6 @@ const FIELD_TRANSFORMS: readonly LogFieldTransform[] = [
   "identity",
   "redact",
   "omittedShape",
-  "tokenPreview",
 ];
 
 function isNonBlankString(value: unknown): value is string {
@@ -206,10 +200,6 @@ function applyFieldTransform(
   switch (transform) {
     case "redact":
       return DEFAULT_REDACTION_CENSOR;
-    case "tokenPreview":
-      return typeof value === "string"
-        ? `${value.slice(0, 3)}...${value.slice(-3)}`
-        : DEFAULT_REDACTION_CENSOR;
     case "omittedShape":
       return omittedShapeOf(value);
     default:
@@ -238,7 +228,6 @@ export function summarizeObjectForLog(
   value: unknown,
   policy: LogObjectSummaryPolicy,
   options?: LogObjectSummaryOptions,
-  _env: Record<string, string | undefined> = process.env,
 ): Record<string, unknown> {
   const resolvedOptions: Required<LogValueSummaryOptions> = {
     ...DEFAULT_LOG_VALUE_SUMMARY_OPTIONS,
