@@ -380,16 +380,7 @@ function createForgeDestination(): pino.DestinationStream {
 }
 
 function formatPrettyValue(value: unknown): string {
-  if (value === null) {
-    return "null";
-  }
-  if (typeof value === "string") {
-    return value;
-  }
-  if (typeof value === "number" || typeof value === "boolean") {
-    return String(value);
-  }
-  return JSON.stringify(value);
+  return typeof value === "string" ? value : JSON.stringify(value);
 }
 
 function formatPrettyLine(chunk: string): string {
@@ -408,19 +399,18 @@ function formatPrettyLine(chunk: string): string {
 
 const PRIORITY_LOG_KEYS = ["level", "time", "msg"] as const;
 
+// Re-inserting the priority keys first fixes their position; the spread then
+// only refreshes their values and appends everything else in original order.
 function orderLogRecord(
   record: Record<string, unknown>,
 ): Record<string, unknown> {
-  return Object.fromEntries([
-    ...PRIORITY_LOG_KEYS.filter((key) => key in record).map((key) => [
+  const priority = Object.fromEntries(
+    PRIORITY_LOG_KEYS.filter((key) => key in record).map((key) => [
       key,
       record[key],
     ]),
-    ...Object.entries(record).filter(
-      ([key]) =>
-        !PRIORITY_LOG_KEYS.includes(key as (typeof PRIORITY_LOG_KEYS)[number]),
-    ),
-  ]);
+  );
+  return { ...priority, ...record };
 }
 
 function mapDestination(
@@ -474,11 +464,11 @@ export function createForgeLogger(
 ): ForgeLogger {
   const env = options.env ?? process.env;
   const { level } = resolveLogLevel(options.name, env);
+  // Pretty output already drops the priority keys and keeps the rest in order,
+  // so it does not need the ordered JSON pass first.
   const effectiveDestination = mapDestination(
-    isPrettyEnabled(options, env)
-      ? mapDestination(destination, formatPrettyLine)
-      : destination,
-    formatOrderedLine,
+    destination,
+    isPrettyEnabled(options, env) ? formatPrettyLine : formatOrderedLine,
   );
   const pinoLogger = pino(
     {
