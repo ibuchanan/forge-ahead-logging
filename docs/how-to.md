@@ -66,6 +66,40 @@ return withForgeInvocationLogging(
 
 Use the wrapper at the boundary where the event enters your application. Avoid wrapping every helper; nested wrappers create repetitive records and consume Forge’s per-invocation log budget.
 
+## Migrate from the previous invocation summary
+
+1. Update consumers, dashboards, and assertions that expected `path`, `cloudId`, `queryParameters`, or `contextToken`. Those fields are now absent, not replaced with previews or placeholders. For example, `{ method: "POST", path: "/private", context: { cloudId: "customer" }, contextToken: "secret" }` now produces `{ kind: "forgeEvent", method: "POST" }`.
+2. Remove authorization-token previews from custom policies. Omit authorization fields or use `transform: "redact"` when presence matters. Do not use `tokenPreview` for authorization data; it remains a value-revealing compatibility transform, not a safe migration option.
+3. If routing is needed, supply an app-controlled route template explicitly. Do not derive it from an arbitrary request path or URL:
+
+   ```ts
+   const routeTemplate = "/widgets/:widgetId"; // Fixed by the handler, not the request.
+   const summary = summarizeForgeInvocation(event);
+   logger.info({ ...summary, routeTemplate }, "received widget request");
+   ```
+
+4. Only if a documented troubleshooting need requires an indirect identifier, deliberately select that field through an application Object Summary Policy. Review its necessity, access, and retention before enabling it:
+
+   ```ts
+   const correlationPolicy = defineLogObjectSummaryPolicy({
+     kind: "supportCorrelation",
+     fields: { cloudId: "context.cloudId" },
+   });
+   const correlation = summarizeObjectForLog(event, correlationPolicy);
+   const scopedLogger = logger.child({ correlation });
+
+   return withForgeInvocationLogging(
+     scopedLogger,
+     event,
+     () => processEvent(event),
+     { includeEventShape: false },
+   );
+   ```
+
+   This is an explicit application decision, not a claim that arbitrary policies or identifiers are safe. The built-in summary still omits the identifier.
+
+5. Leave value-bearing event-shape diagnostics disabled for sensitive payloads. Set `includeEventShape: false` for invocation logging and lifecycle entry logging if necessary; remove `FORGE_LOG_EVENT_SHAPE=true`. Raising `LOG_LEVEL` alone does not change the built-in summary, but the existing opt-in diagnostics can still copy payload values. Audit custom context, result summaries, messages, and metadata separately.
+
 ## Log results and errors consistently
 
 For a result value:
@@ -99,16 +133,17 @@ Use `defineLogObjectSummaryPolicy` and `summarizeObjectForLog` when a domain obj
 
 ```ts
 const policy = defineLogObjectSummaryPolicy({
+  kind: "syncOperation",
   fields: {
-    id: "id",
     status: "status",
-    token: { path: "token", transform: "preview" },
+    attemptCount: "attemptCount",
+    body: { path: "body", transform: "omittedShape" },
   },
 });
 
 logger.info(
-  { account: summarizeObjectForLog(account, policy) },
-  "account summary",
+  { operation: summarizeObjectForLog(operation, policy) },
+  "operation summary",
 );
 ```
 

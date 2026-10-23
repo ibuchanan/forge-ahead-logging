@@ -92,13 +92,43 @@ Projects and summarizes an object according to a `LogObjectSummaryPolicy`.
 
 ### Built-in transforms
 
-`LogFieldTransform` represents named, package-controlled transformations such as token previews, redaction, and omitted-shape summaries. Policies do not accept arbitrary callback functions.
+`LogFieldTransform` supports these named, package-controlled transformations. Policies do not accept arbitrary callback functions.
+
+| Transform | Output |
+| --- | --- |
+| `identity` (default) | The selected value passed through the bounded value summarizer. |
+| `redact` | `[redacted]` for a present field. |
+| `omittedShape` | `{ omitted: true }`, plus `length` for strings, `items` for arrays, or `keys` for objects; no field names or values are copied. |
+| `tokenPreview` (deprecated for authorization data) | Compatibility only: the first three and last three characters of a string, separated by `...`; non-strings become `[redacted]`. Short strings can expose the entire value. A preview is not safe authorization-data logging. |
+
+`tokenPreview` remains accepted by caller-supplied policies for compatibility but is not used by the built-in Forge event policy. Authorization data must be omitted or fully redacted. There is no `preview` transform.
 
 ## Forge event logging
 
 ### `summarizeForgeInvocation(event, options?)`
 
-Returns the bounded event summary used by invocation logging.
+Returns the minimized `FORGE_EVENT_SUMMARY_POLICY` projection used by standalone invocation records and lifecycle entry/completion/failure records. Missing fields are omitted. The summary does not depend on logger redaction or the configured log level.
+
+| Retained field | Troubleshooting purpose |
+| --- | --- |
+| `kind: "forgeEvent"` | Identify the record category. |
+| `eventType` | Identify the Forge event subscription being handled. |
+| `method` | Distinguish HTTP invocation methods. |
+| `requestId` | Correlate records for a platform request, not a customer identity. |
+| `moduleKey` from `context.moduleKey` | Identify the configured app module. |
+| `functionKey` from `call.functionKey` | Identify the configured function. |
+| `appId` from `app.id` | Identify the app, not a customer installation or tenant. |
+| `appVersion` from `app.version` | Correlate behavior with a deployed app version. |
+| `selfGenerated` | Diagnose app-generated event loops. |
+| `headers`, `body` | `omittedShape` metadata only: presence and size/count, without names or values. |
+
+These value-bearing fields are intended for platform/app-controlled operational metadata, not user-generated text. The summary does not automatically select Cloud, account, site, or tenant identifiers. It excludes `contextToken` (including fragments), raw paths/URLs, query keys/values, and arbitrary payload content. No route is inferred from a URL. Query parameters are omitted entirely, without a count.
+
+**Output-contract change:** `path`, `cloudId`, `queryParameters`, and `contextToken` are no longer returned, including when the exported policy is used directly. See [migration steps](how-to.md#migrate-from-the-previous-invocation-summary).
+
+The same projection applies at `info`, `debug`, and `trace` logger thresholds. Standalone/entry/success record levels remain `info` or `debug`; failures retain their configured severity. Wrapper return values, thrown/rejected errors, and success/failure classification are unchanged.
+
+**Compatibility boundary:** opt-in `includeEventShape` / `FORGE_LOG_EVENT_SHAPE` diagnostics still use the bounded, value-bearing `summarizeForLog` representation at debug/trace-enabled thresholds and can copy excluded data. They are not covered by the minimized-summary guarantee; leave them disabled for sensitive payloads. Caller-supplied policies, result summaries, raw messages, logger bindings, and ambient context can also introduce data deliberately; they are not automatically private.
 
 ### `logForgeInvocation(logger, event, message?, options?)`
 

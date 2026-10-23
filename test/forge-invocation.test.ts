@@ -3,7 +3,7 @@ import { logForgeInvocation, summarizeForgeInvocation } from "../src/index";
 import { createCapturingLogger } from "../src/testing";
 
 describe("summarizeForgeInvocation", () => {
-  it("matches the spec's Forge event summary example", () => {
+  it("omits authorization tokens entirely, even without logger redaction", () => {
     const event = {
       contextToken: "1234567890",
       headers: { authorization: "Bearer secret", cookie: "sid=abc" },
@@ -14,40 +14,45 @@ describe("summarizeForgeInvocation", () => {
 
     expect(result).toEqual({
       kind: "forgeEvent",
-      contextToken: "123...890",
       headers: { omitted: true, keys: 2 },
       body: { omitted: true, length: 20 },
     });
   });
 
-  it("promotes routing fields when present and omits missing ones", () => {
+  it("retains operational fields but omits paths, queries, and customer identifiers", () => {
     const event = {
       eventType: "avi:jira:created:issue",
       method: "POST",
-      path: "/webhook",
+      path: "/customers/synthetic-person@example.test/private-issue",
+      url: "https://synthetic-site.example.test/private-issue?search=customer-note",
       requestId: "req-1",
-      context: { cloudId: "cloud-1", moduleKey: "module-1" },
+      cloudId: "synthetic-cloud",
+      accountId: "synthetic-account",
+      siteId: "synthetic-site",
+      tenantId: "synthetic-tenant",
+      context: {
+        cloudId: "synthetic-cloud",
+        accountId: "synthetic-account",
+        siteId: "synthetic-site",
+        tenantId: "synthetic-tenant",
+        moduleKey: "module-1",
+      },
       call: { functionKey: "fn-1" },
       app: { id: "app-1", version: "1.0.0" },
       selfGenerated: false,
-      queryParameters: { foo: ["bar"] },
+      queryParameters: { "customer-search": ["private customer note"] },
     };
 
-    const result = summarizeForgeInvocation(event);
-
-    expect(result).toEqual({
+    expect(summarizeForgeInvocation(event)).toEqual({
       kind: "forgeEvent",
       eventType: "avi:jira:created:issue",
       method: "POST",
-      path: "/webhook",
       requestId: "req-1",
-      cloudId: "cloud-1",
       moduleKey: "module-1",
       functionKey: "fn-1",
       appId: "app-1",
       appVersion: "1.0.0",
       selfGenerated: false,
-      queryParameters: { foo: ["bar"] },
     });
   });
 });

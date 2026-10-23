@@ -338,6 +338,7 @@ export type LogFieldPath = string | readonly string[];
 export type LogFieldTransform =
   | "identity"
   | "redact"
+  /** @deprecated Do not preview authorization data. Use redact or omit the field. */
   | "tokenPreview"
   | "omittedShape";
 
@@ -487,19 +488,12 @@ export const FORGE_EVENT_SUMMARY_POLICY = defineLogObjectSummaryPolicy({
   fields: {
     eventType: "eventType",
     method: "method",
-    path: "path",
     requestId: "requestId",
-    cloudId: "context.cloudId",
     moduleKey: "context.moduleKey",
     functionKey: "call.functionKey",
     appId: "app.id",
     appVersion: "app.version",
     selfGenerated: "selfGenerated",
-    queryParameters: "queryParameters",
-    contextToken: {
-      path: "contextToken",
-      transform: "tokenPreview",
-    },
     headers: {
       path: "headers",
       transform: "omittedShape",
