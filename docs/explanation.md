@@ -63,6 +63,12 @@ it catches common secret-shaped paths,
 but it cannot know every sensitive field in every product payload.
 The application still owns the decision about what is safe to log.
 
+Atlassian’s [Forge logging guidelines](https://developer.atlassian.com/platform/forge/logging-guidelines/)
+explain the privacy considerations behind that decision:
+collect only what is needed for troubleshooting, avoid personal data and authorization data,
+and treat indirect identifiers such as account and cloud IDs with caution.
+Bounding a value does not make it safe to collect.
+
 ## Context is an ergonomic layer, not authority
 
 Passing `requestId` and operation metadata through every helper is explicit but noisy.
