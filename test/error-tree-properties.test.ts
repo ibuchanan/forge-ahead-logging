@@ -3,56 +3,29 @@ import fc from "fast-check";
 import { assert, describe, expect, it, vi } from "vitest";
 import { logError } from "../src/index";
 import { createCapturingLogger } from "../src/testing";
+import {
+  failureOf,
+  type ObjectFailureKind,
+  objectFailureKinds,
+} from "./privacy-arbitraries";
 
 const failureDescription = fc.record({
-  kind: fc.constantFrom("native", "domain", "problem", "aggregate", "unknown"),
+  kind: fc.constantFrom(...objectFailureKinds),
   text: fc.string({ maxLength: 80 }),
   unexpectedEvidence: fc.jsonValue({ maxDepth: 2 }),
 });
 
 // Construct fresh nodes per run so linking/freezing cannot contaminate shrinking.
-// Expected projections come from the category, not the production classifier.
 function makeFailure({
   kind,
   text,
   unexpectedEvidence,
 }: {
-  kind: string;
+  kind: ObjectFailureKind;
   text: string;
   unexpectedEvidence: unknown;
 }) {
-  const privateText = `private-payload:${text}`;
-  let error: Error | Record<string, unknown>;
-  let summary: Record<string, unknown>;
-  switch (kind) {
-    case "native":
-      error = Object.assign(new TypeError(privateText), { stack: privateText });
-      summary = { errorName: "TypeError" };
-      break;
-    case "domain":
-      error = { code: "UPSTREAM_BUSY", message: privateText };
-      summary = { errorCode: "UPSTREAM_BUSY" };
-      break;
-    case "problem":
-      error = {
-        type: "urn:problem:throttled",
-        status: 429,
-        title: privateText,
-        detail: privateText,
-        instance: privateText,
-      };
-      summary = { type: "urn:problem:throttled", status: 429 };
-      break;
-    case "aggregate":
-      error = new AggregateError([new Error(privateText)], privateText);
-      summary = { errorName: "AggregateError" };
-      break;
-    default:
-      error = { message: privateText };
-      summary = {};
-  }
-  Object.assign(error, { unexpectedEvidence });
-  return { error, summary: { ...summary, outcome: "failure" } };
+  return failureOf(kind, `private-payload:${text}`, { unexpectedEvidence });
 }
 
 function makeCauseChain(
@@ -88,9 +61,7 @@ function expectCauseChainUnchanged(
   }
 }
 
-const boundaryFailures = (
-  ["native", "domain", "problem", "aggregate", "unknown"] as const
-).map((kind) => ({
+const boundaryFailures = objectFailureKinds.map((kind) => ({
   kind,
   text: "boundary",
   unexpectedEvidence: null,

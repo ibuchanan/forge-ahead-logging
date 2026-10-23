@@ -76,3 +76,79 @@ export function plantedValue({ canary, rest, asKey, noise }: Plant): unknown {
   }
   return value;
 }
+
+export const objectFailureKinds = [
+  "native",
+  "domain",
+  "problem",
+  "aggregate",
+  "plain",
+] as const;
+export type ObjectFailureKind = (typeof objectFailureKinds)[number];
+export const failureKinds = [...objectFailureKinds, "string"] as const;
+export type FailureKind = (typeof failureKinds)[number];
+
+/**
+ * Builds a fresh failure of one kind with `privateText` in every field the
+ * contract must never emit, and the summary the logger must emit for it.
+ * `extra` becomes additional own properties of object failures. The expected
+ * summary comes from the failure's category, not from the production classifier.
+ */
+export function failureOf(
+  kind: ObjectFailureKind,
+  privateText: string,
+  extra?: Record<string, unknown>,
+): { error: Error | Record<string, unknown>; summary: Record<string, unknown> };
+export function failureOf(
+  kind: FailureKind,
+  privateText: string,
+  extra?: Record<string, unknown>,
+): { error: unknown; summary: Record<string, unknown> };
+export function failureOf(
+  kind: FailureKind,
+  privateText: string,
+  extra: Record<string, unknown> = {},
+): { error: unknown; summary: Record<string, unknown> } {
+  const outcome = { outcome: "failure" };
+  switch (kind) {
+    case "native":
+      return {
+        error: Object.assign(new TypeError(privateText), extra, {
+          stack: `${privateText}\n    at ${privateText}`,
+        }),
+        summary: { errorName: "TypeError", ...outcome },
+      };
+    case "domain":
+      return {
+        error: { code: "CONFLICT", message: privateText, ...extra },
+        summary: { errorCode: "CONFLICT", ...outcome },
+      };
+    case "problem":
+      return {
+        error: {
+          type: "urn:problem:conflict",
+          status: 409,
+          title: privateText,
+          detail: privateText,
+          instance: privateText,
+          ...extra,
+        },
+        summary: { type: "urn:problem:conflict", status: 409, ...outcome },
+      };
+    case "aggregate":
+      return {
+        error: Object.assign(
+          new AggregateError([new Error(privateText)], privateText),
+          extra,
+        ),
+        summary: { errorName: "AggregateError", ...outcome },
+      };
+    case "plain":
+      return {
+        error: { message: privateText, ...extra },
+        summary: outcome,
+      };
+    case "string":
+      return { error: privateText, summary: outcome };
+  }
+}

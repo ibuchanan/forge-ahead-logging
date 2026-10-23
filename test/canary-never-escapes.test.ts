@@ -10,47 +10,23 @@ import {
   withForgeInvocationLogging,
 } from "../src/index";
 import { createCapturingLogger } from "../src/testing";
-import { type Plant, plant, plantedValue } from "./privacy-arbitraries";
+import {
+  type FailureKind,
+  failureKinds,
+  failureOf,
+  type Plant,
+  plant,
+  plantedValue,
+} from "./privacy-arbitraries";
 import { expectNoneEscaped } from "./privacy-helpers";
 
-const failureKind = fc.constantFrom(
-  "native",
-  "domain",
-  "problem",
-  "aggregate",
-  "plain",
-  "string",
-);
+const failureKind = fc.constantFrom(...failureKinds);
 
-// Every kind carries the canary in fields the contract must never emit.
-function makeFailure(kind: string, p: Plant): unknown {
+// Every kind carries the canary in fields the contract must never emit, and in
+// a cause that holds the planted payload.
+function makeFailure(kind: FailureKind, p: Plant): unknown {
   const payload = { [p.root]: plantedValue(p) };
-  switch (kind) {
-    case "native":
-      return Object.assign(new TypeError(p.canary), payload, {
-        stack: `${p.canary}\n    at ${p.canary}`,
-      });
-    case "domain":
-      return { code: "CONFLICT", message: p.canary, ...payload };
-    case "problem":
-      return {
-        type: "urn:problem:conflict",
-        status: 409,
-        title: p.canary,
-        detail: p.canary,
-        instance: p.canary,
-        ...payload,
-      };
-    case "aggregate":
-      return Object.assign(
-        new AggregateError([new Error(p.canary)], p.canary, { cause: payload }),
-        payload,
-      );
-    case "plain":
-      return { message: p.canary, ...payload };
-    default:
-      return p.canary;
-  }
+  return failureOf(kind, p.canary, { ...payload, cause: payload }).error;
 }
 
 function settle(operation: () => unknown): unknown {
