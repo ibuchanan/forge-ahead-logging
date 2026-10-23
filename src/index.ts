@@ -223,6 +223,49 @@ export function summarizeForLog(
   return summarizeValue(value, resolved, 0, new Set());
 }
 
+function summarizeShapeForLog(
+  value: unknown,
+  options?: LogValueSummaryOptions,
+): JSONValue {
+  const resolved = { ...DEFAULT_LOG_VALUE_SUMMARY_OPTIONS, ...options };
+  try {
+    return summarizeShape(value, resolved, 0, new Set());
+  } catch {
+    return { type: "unknown", omitted: "unavailable" };
+  }
+}
+
+function summarizeShape(
+  value: unknown,
+  options: Required<LogValueSummaryOptions>,
+  depth: number,
+  seen: ReadonlySet<unknown>,
+): JSONValue {
+  if (value === null) return { type: "null" };
+  if (typeof value === "string")
+    return { type: "string", length: value.length };
+  if (typeof value !== "object") return { type: typeof value };
+  const type = Array.isArray(value) ? "array" : "object";
+  if (depth >= options.maxDepth) return { type, omitted: "max depth" };
+  if (seen.has(value)) return { type, omitted: "circular" };
+  const nextSeen = new Set(seen).add(value);
+  const keys = Object.keys(value);
+  const limit =
+    type === "array" ? options.maxArrayItems : options.maxObjectKeys;
+  const values = keys.slice(0, limit).map((key) => {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    return descriptor && "value" in descriptor
+      ? summarizeShape(descriptor.value, options, depth + 1, nextSeen)
+      : { type: "accessor" };
+  });
+  return {
+    type,
+    ...(Array.isArray(value) ? { items: value.length } : { keys: keys.length }),
+    values,
+    ...(keys.length > limit ? { omitted: keys.length - limit } : {}),
+  };
+}
+
 function baseNameOf(path: string): string {
   const segments = path.split(".");
   return segments[segments.length - 1].toLowerCase();
@@ -357,7 +400,9 @@ export interface LogObjectSummaryPolicy {
   labels?: LogFieldMap;
 }
 
+/** Options for explicit application projections; verbosity never authorizes labels. */
 export interface LogObjectSummaryOptions extends LogValueSummaryOptions {
+  /** Include the policy's reviewed labels at this call site; environment toggles do not enable them. */
   includeLabels?: boolean;
 }
 
@@ -464,14 +509,13 @@ export function summarizeObjectForLog(
   value: unknown,
   policy: LogObjectSummaryPolicy,
   options?: LogObjectSummaryOptions,
-  env: Record<string, string | undefined> = process.env,
+  _env: Record<string, string | undefined> = process.env,
 ): Record<string, unknown> {
   const resolvedOptions: Required<LogValueSummaryOptions> = {
     ...DEFAULT_LOG_VALUE_SUMMARY_OPTIONS,
     ...options,
   };
-  const includeLabels =
-    options?.includeLabels ?? env.FORGE_LOG_LABELS === "true";
+  const includeLabels = options?.includeLabels === true;
   const labels =
     includeLabels && policy.labels
       ? summarizeFieldMap(value, policy.labels, resolvedOptions)
@@ -532,13 +576,13 @@ function computeEventShape(
   if (options?.includeEventShape !== undefined) {
     if (options.includeEventShape) {
       return isVerbose
-        ? { eventShape: summarizeForLog(event, options) }
+        ? { eventShape: summarizeShapeForLog(event, options) }
         : { eventShapeOmitted: "requires debug or trace" };
     }
     return {};
   }
   if (env.FORGE_LOG_EVENT_SHAPE === "true" && isVerbose) {
-    return { eventShape: summarizeForLog(event, options) };
+    return { eventShape: summarizeShapeForLog(event, options) };
   }
   return {};
 }
@@ -846,9 +890,15 @@ export function logError(
 
 export type DebugProbeLevel = "debug" | "trace";
 
+/** Probe diagnostics are structural unless an application explicitly selects values. */
 export interface LogProbeOptions {
   level?: DebugProbeLevel;
+  /** Structural by default; lazy callbacks run only when the requested level is enabled. */
   metadata?: unknown | (() => unknown);
+  /** Reviewed value projection replacing the structural successful-value summary. */
+  valuePolicy?: LogObjectSummaryPolicy;
+  /** Reviewed projection replacing structural probe-only metadata. */
+  metadataPolicy?: LogObjectSummaryPolicy;
   errorPolicy?: LogObjectSummaryPolicy;
 }
 
@@ -869,7 +919,7 @@ function isProbeLevelEnabled(
 
 function resolveProbeMetadata(
   options: LogProbeOptions | undefined,
-): JSONValue | undefined {
+): JSONValue | Record<string, unknown> | undefined {
   if (options?.metadata === undefined) {
     return undefined;
   }
@@ -877,7 +927,9 @@ function resolveProbeMetadata(
     typeof options.metadata === "function"
       ? (options.metadata as () => unknown)()
       : options.metadata;
-  return summarizeForLog(metadata);
+  return options.metadataPolicy
+    ? summarizeObjectForLog(metadata, options.metadataPolicy)
+    : summarizeShapeForLog(metadata);
 }
 
 function logProbeSuccess(
@@ -890,15 +942,21 @@ function logProbeSuccess(
   if (!isProbeLevelEnabled(logger, level)) {
     return;
   }
-  const debugProbe: Record<string, unknown> = {
-    label,
-    value: summarizeForLog(value),
-  };
-  const metadata = resolveProbeMetadata(options);
-  if (metadata !== undefined) {
-    debugProbe.metadata = metadata;
+  try {
+    const debugProbe: Record<string, unknown> = {
+      label,
+      value: options?.valuePolicy
+        ? summarizeObjectForLog(value, options.valuePolicy)
+        : summarizeShapeForLog(value),
+    };
+    const metadata = resolveProbeMetadata(options);
+    if (metadata !== undefined) {
+      debugProbe.metadata = metadata;
+    }
+    logger[level]({ debugProbe });
+  } catch {
+    // Probe-only diagnostics must not change the application outcome.
   }
-  logger[level]({ debugProbe });
 }
 
 function logProbeError(
@@ -911,15 +969,19 @@ function logProbeError(
   if (!isProbeLevelEnabled(logger, level)) {
     return;
   }
-  const debugProbe: Record<string, unknown> = {
-    label,
-    error: buildErrorMetadata(logger, error, undefined, options?.errorPolicy),
-  };
-  const metadata = resolveProbeMetadata(options);
-  if (metadata !== undefined) {
-    debugProbe.metadata = metadata;
+  try {
+    const debugProbe: Record<string, unknown> = {
+      label,
+      error: buildErrorMetadata(logger, error, undefined, options?.errorPolicy),
+    };
+    const metadata = resolveProbeMetadata(options);
+    if (metadata !== undefined) {
+      debugProbe.metadata = metadata;
+    }
+    logger[level]({ debugProbe });
+  } catch {
+    // Preserve the original application failure, not a diagnostic failure.
   }
-  logger[level]({ debugProbe });
 }
 
 export function logProbe<T>(
@@ -1306,12 +1368,14 @@ function formatConsoleArgs(
   if (typeof args[0] === "string") {
     return {
       obj:
-        args.length > 1 ? { consoleArgs: summarizeForLog(args.slice(1)) } : {},
+        args.length > 1
+          ? { consoleArgs: summarizeShapeForLog(args.slice(1)) }
+          : {},
       message: args[0],
     };
   }
   return {
-    obj: { consoleArgs: summarizeForLog(args) },
+    obj: { consoleArgs: summarizeShapeForLog(args) },
     message: `console.${level}`,
   };
 }

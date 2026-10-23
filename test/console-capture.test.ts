@@ -64,7 +64,7 @@ describe("installConsoleCapture", () => {
     expect(records[1].level).toBe("info");
   });
 
-  it("summarizes and redacts console arguments through the Forge logger", () => {
+  it("reports console argument types without copying values or keys", () => {
     const { logger, records } = createCapturingLogger();
     installConsoleCapture(logger);
 
@@ -73,10 +73,23 @@ describe("installConsoleCapture", () => {
     expect(records).toHaveLength(1);
     const [record] = records;
     expect(record.msg).toBe("sensitive");
-    const consoleArgs = record.consoleArgs as Record<string, unknown>[];
-    expect(consoleArgs).toHaveLength(1);
-    expect(consoleArgs[0].token).toBe("[redacted]");
-    expect(consoleArgs[0].safe).toBe("visible");
+    expect(record.consoleArgs).toEqual({
+      type: "array",
+      items: 1,
+      values: [
+        {
+          type: "object",
+          keys: 2,
+          values: [
+            { type: "string", length: 12 },
+            { type: "string", length: 7 },
+          ],
+        },
+      ],
+    });
+    expect(JSON.stringify(record.consoleArgs)).not.toMatch(
+      /secret-value|visible|token|safe/,
+    );
   });
 
   it("does not break the logger's own output after capture", () => {

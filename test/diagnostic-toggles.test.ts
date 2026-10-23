@@ -14,7 +14,7 @@ const policyWithLabels = defineLogObjectSummaryPolicy({
 });
 
 describe("FORGE_LOG_LABELS", () => {
-  it("includes labels when the env var is true", () => {
+  it("does not authorize value-bearing labels from the env var alone", () => {
     const result = summarizeObjectForLog(
       { id: 1, displayName: "Test" },
       policyWithLabels,
@@ -22,7 +22,7 @@ describe("FORGE_LOG_LABELS", () => {
       { FORGE_LOG_LABELS: "true" },
     );
 
-    expect(result.displayName).toBe("Test");
+    expect(result.displayName).toBeUndefined();
   });
 
   it("excludes labels when the env var is unset", () => {

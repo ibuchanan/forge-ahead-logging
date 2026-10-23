@@ -76,7 +76,7 @@ Context is for enrichment only. It is not a substitute for validating identity, 
 
 ### `summarizeForLog(value, options?)`
 
-Produces a bounded, JSON-safe representation of an arbitrary value. Summary options control depth, array size, object keys, string length, and other limits.
+Produces a bounded, JSON-safe, value-bearing representation. Summary options control depth, array size, object keys, string length, and other limits. It retains ordinary leaf values and property names; bounds and common secret-shaped-key redaction are not automatic privacy. Automatic structural diagnostics use a separate internal representation, not this API.
 
 ### `withDefaultRedaction(redact?)`
 
@@ -88,7 +88,7 @@ Defines a reusable allow-list projection for a domain object. Policies select kn
 
 ### `summarizeObjectForLog(value, policy, options?)`
 
-Projects and summarizes an object according to a `LogObjectSummaryPolicy`.
+Projects and summarizes an object according to a `LogObjectSummaryPolicy`. `fields` are explicit application selections; `labels` are selected only with `includeLabels: true` at the call site. `FORGE_LOG_LABELS` no longer enables labels (the optional environment argument remains accepted for compatibility). Both maps require application review; generic names such as `name` or `id` do not establish sensitivity or safety. Selecting an object with `identity` can retain its nested keys and values within the normal bounds.
 
 ### Built-in transforms
 
@@ -128,7 +128,26 @@ These value-bearing fields are intended for platform/app-controlled operational 
 
 The same projection applies at `info`, `debug`, and `trace` logger thresholds. Standalone/entry/success record levels remain `info` or `debug`; failures retain their configured severity. Wrapper return values, thrown/rejected errors, and success/failure classification are unchanged.
 
-**Compatibility boundary:** opt-in `includeEventShape` / `FORGE_LOG_EVENT_SHAPE` diagnostics still use the bounded, value-bearing `summarizeForLog` representation at debug/trace-enabled thresholds and can copy excluded data. They are not covered by the minimized-summary guarantee; leave them disabled for sensitive payloads. Caller-supplied policies, result summaries, raw messages, logger bindings, and ambient context can also introduce data deliberately; they are not automatically private.
+### Structural diagnostics
+
+`eventShape`, unprojected probe values/metadata, and captured console arguments share a structural representation. It never copies leaf values or input property names, including unknown/customer-controlled keys. The built-in invocation and automatic error projections remain unchanged when verbosity increases.
+
+| Input | Structural output |
+| --- | --- |
+| `null` | `{ type: "null" }` |
+| String | `{ type: "string", length: number }`; no prefix or suffix. |
+| Other primitive or function | `{ type: "number" }`, `"boolean"`, `"undefined"`, `"bigint"`, `"symbol"`, or `"function"`; no value, description, or function name. |
+| Object | `{ type: "object", keys: number, values: [...] }`; unnamed child shapes in own enumerable string-key order. |
+| Array | `{ type: "array", items: number, values: [...] }`; unnamed enumerable entry shapes. |
+| Accessor property | `{ type: "accessor" }`; getters/setters are not invoked. |
+| Depth/cycle boundary | `{ type: "object" \| "array", omitted: "max depth" \| "circular" }`. |
+| Inspection failure | `{ type: "unknown", omitted: "unavailable" }` for the whole structural summary; no exception text. |
+
+Defaults retain at most 5 array entries, 12 object entries, and 3 container levels. `omitted: number` counts unvisited enumerable entries when capped. Strings contribute only length, so no string-truncation marker is needed. Structural traversal does not call `toJSON` or stringify objects. Standalone event-shape options reuse `maxDepth`, `maxArrayItems`, and `maxObjectKeys`; lifecycle entries, probes, and console capture use the defaults. Size/count metadata is still collected data, not a guarantee against all inference.
+
+`includeEventShape` overrides `FORGE_LOG_EVENT_SHAPE === "true"`. Structural event shapes require a debug/trace-enabled logger, even when the record is written at info. At info-only thresholds, explicit `true` yields `eventShapeOmitted: "requires debug or trace"`; the environment toggle alone yields no shape or marker. Explicit `false` disables the shape. Lifecycle shapes appear on optional entry records, not completion/failure records.
+
+**Output-contract change:** shapes no longer use value-bearing `summarizeForLog` output. See [diagnostic migration](how-to.md#migrate-from-value-bearing-diagnostics-breaking-change). Caller-supplied policies, result summaries, raw messages, logger bindings, and ambient context can still introduce values deliberately; they are not automatically private.
 
 ### `logForgeInvocation(logger, event, message?, options?)`
 
@@ -198,15 +217,27 @@ Existing `summarizeErr` callbacks on result logging remain additive after the se
 
 ### `logProbe(logger, label, valueOrThunk, options?)`
 
-Logs a bounded `debug` or `trace` probe while returning the original value or promise outcome. Probe-only metadata may be lazy when the selected level is disabled.
+Logs a bounded `debug` (default) or `trace` probe while returning the original value or promise outcome. The expression/thunk always runs, even when the requested probe level is disabled. Disabled probes do not compute summaries, policy projections, or lazy metadata. Enabled promise probes log only after settlement.
 
-A probe must not make the application expression conditional on whether logging is enabled.
+| Option | Meaning |
+| --- | --- |
+| `level` | `"debug"` (default) or `"trace"`; the logger threshold must enable the selected level. |
+| `metadata` | Value or lazy callback; structural by default. |
+| `valuePolicy` | Explicit Object Summary Policy replacing the structural successful-value summary under `debugProbe.value`. |
+| `metadataPolicy` | Explicit Object Summary Policy replacing structural metadata under `debugProbe.metadata`. |
+| `errorPolicy` | Explicit replacement for the minimal failure projection under `debugProbe.error`. |
+
+Policies reuse the existing bounds and transforms. Policy labels remain absent; review necessary fields into the policy's `fields` map rather than relying on an environment toggle. If probe-only metadata, projection, or record emission throws, that probe record is dropped, not retried or stringified; the original sync value, throw, fulfillment, or rejection is preserved.
+
+**Raw-text escape hatch:** the `label` parameter is caller-supplied text and remains verbatim. Use fixed app-controlled labels, not names, identifiers, tokens, or customer content. There is no arbitrary-text privacy detector.
 
 ## Console capture
 
 ### `installConsoleCapture(logger)`
 
-Installs a temporary bridge from `console.*` calls to the Forge logger and returns an uninstall function. Captured output is intended for third-party integration boundaries.
+Installs a temporary bridge from `console.*` calls to the Forge logger and returns an uninstall function. `log`/`info` write at info, `warn` at warn, `error` at error, and `debug` at debug. Remaining arguments are structural under `consoleArgs`; a non-string first argument is included there and uses a fixed `console.<method>` message. No argument values or property names are copied, and captured Error objects do not receive a raw message/stack projection.
+
+**Raw-message escape hatch:** a leading string is retained verbatim as the record message, including formatting placeholders; subsequent arguments are not interpolated. Capture does not sanitize that string. Do not capture third-party output containing sensitive message text merely because structured arguments are minimized. For reviewed value-bearing evidence, use an explicit Object Summary Policy with the logger directly instead of console capture. Uninstall restores the previous console methods.
 
 ## Demo and testing APIs
 

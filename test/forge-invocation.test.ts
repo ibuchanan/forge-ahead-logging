@@ -84,7 +84,7 @@ describe("logForgeInvocation", () => {
     expect(record.eventShapeOmitted).toBe("requires debug or trace");
   });
 
-  it("includes the full bounded event shape at debug", () => {
+  it("includes a bounded structural event shape at debug", () => {
     const { logger, records } = createCapturingLogger({
       env: { LOG_LEVEL: "debug" },
     });
@@ -98,8 +98,12 @@ describe("logForgeInvocation", () => {
     const [record] = records;
     expect(record.eventShapeOmitted).toBeUndefined();
     expect(record.eventShape).toEqual({
-      eventType: "avi:jira:created:issue",
-      secret: "[redacted]",
+      type: "object",
+      keys: 2,
+      values: [
+        { type: "string", length: 22 },
+        { type: "string", length: 3 },
+      ],
     });
   });
 });

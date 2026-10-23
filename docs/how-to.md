@@ -98,7 +98,7 @@ Use the wrapper at the boundary where the event enters your application. Avoid w
 
    This is an explicit application decision, not a claim that arbitrary policies or identifiers are safe. The built-in summary still omits the identifier.
 
-5. Leave value-bearing event-shape diagnostics disabled for sensitive payloads. Set `includeEventShape: false` for invocation logging and lifecycle entry logging if necessary; remove `FORGE_LOG_EVENT_SHAPE=true`. Raising `LOG_LEVEL` alone does not change the built-in summary, but the existing opt-in diagnostics can still copy payload values. Audit custom context, result summaries, messages, and metadata separately.
+5. Update consumers of `eventShape`: enabled diagnostics now contain only bounded, unnamed types and counts, not payload values or property names. `includeEventShape` and `FORGE_LOG_EVENT_SHAPE` still control inclusion at debug/trace-enabled thresholds; they cannot restore excluded fields. Audit custom context, result summaries, messages, and explicit projections separately. See [diagnostic migration](#migrate-from-value-bearing-diagnostics-breaking-change).
 
 ## Log results and errors consistently
 
@@ -170,9 +170,36 @@ Review every selected value for necessity, access, and retention. Keep codes and
 
 6. Audit caller-supplied messages, labels, probe metadata, success summaries, logger bindings, and ambient context separately. These remain explicit application inputs and can reintroduce excluded data; raising the log threshold is not a privacy control.
 
+## Migrate from value-bearing diagnostics (breaking change)
+
+1. Update `eventShape`, `debugProbe.value`, `debugProbe.metadata`, and `consoleArgs` consumers to use [structural diagnostics](reference.md#structural-diagnostics). For example, `{ person: "customer text" }` now has shape `{ type: "object", keys: 1, values: [{ type: "string", length: 13 }] }`, not a truncated payload. Do not read old payload keys from these outputs.
+2. Keep `includeEventShape` / `FORGE_LOG_EVENT_SHAPE` only where structural evidence is useful. They still require a debug/trace-enabled logger and never enable excluded invocation fields or error text. Count/length metadata still requires an operational need.
+3. Remove reliance on `FORGE_LOG_LABELS`. To retain a reviewed optional label, select it in the application's policy and pass `includeLabels: true` explicitly to `summarizeObjectForLog`. Do not enable names or customer content globally. A field called `name` or `id` can describe either an app-controlled operation or a person; review the actual value source.
+4. If a probe needs value-bearing operational evidence, provide a narrow policy instead of restoring the entire value. Keep evaluation outside any log-level check:
+
+   ```ts
+   const progressPolicy = defineLogObjectSummaryPolicy({
+     kind: "syncProgress",
+     fields: { processed: "processed", retryable: "retryable" },
+   });
+   const attemptPolicy = defineLogObjectSummaryPolicy({
+     kind: "syncAttempt",
+     fields: { attempts: "attempts" },
+   });
+   const result = await logger.probe("sync batch", () => syncBatch(), {
+     valuePolicy: progressPolicy,
+     metadata: () => ({ attempts, customer: customerData }),
+     metadataPolicy: attemptPolicy,
+   });
+   ```
+
+   Only the reviewed selections are emitted. `syncBatch()` still runs at info; lazy metadata and policy projections do not. Omit a policy to collect structural evidence instead. Use `errorPolicy` separately for reviewed failure evidence. If probe-only diagnostics throw, the probe record is dropped and the application outcome is preserved.
+5. For console output requiring reviewed values, replace the call with a logger record built using `summarizeObjectForLog`. Console capture has no raw-argument mode. Uninstall it when no longer needed.
+6. Audit raw text separately: probe labels, logger messages, and a captured console call's leading string remain verbatim. Keep these fixed and app-controlled. `summarizeForLog`, explicit policy selections, callbacks, bindings, ambient context, and the demo API remain value-bearing application escape hatches; bounding or redaction does not make arbitrary input private.
+
 ## Summarize a rich object before logging it
 
-Use `summarizeForLog` for general values:
+Use `summarizeForLog` only for values already reviewed for collection. It bounds values and redacts common secret-shaped fields; it still copies other values and property names:
 
 ```ts
 logger.debug({ payload: summarizeForLog(payload) }, "payload summary");

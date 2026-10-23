@@ -69,6 +69,16 @@ collect only what is needed for troubleshooting, avoid personal data and authori
 and treat indirect identifiers such as account and cloud IDs with caution.
 Bounding a value does not make it safe to collect.
 
+## Verbosity is not permission to collect values
+
+A debug threshold answers how much diagnostic activity to emit, not whether a person's name, a token, or customer text is necessary. Environment toggles are operational switches, not a review of each selected field. Property names can themselves be customer-controlled data, so retaining them while hiding leaves is not a generally safe structural representation.
+
+Automatic structural diagnostics therefore retain bounded, unnamed types and counts rather than leaf values or arbitrary property names. The same distinction applies to event shapes, successful probe values, probe metadata, and captured console arguments. Invocation and error projections remain independently minimized. A label environment toggle cannot authorize value collection: optional policy labels need explicit inclusion at the application call site.
+
+When values are necessary, an application Object Summary Policy makes that selection visible in code review. This is a reuse of the existing projection boundary, not a second privacy-policy framework. The source and purpose of the value matter more than a generic field name such as `name` or `id`. Counts and lengths can also reveal information, so structural does not mean free of all privacy considerations.
+
+Raw text is a deliberate remaining boundary. Logger messages, probe labels, and the leading string in console capture are not content-classified or sanitized. Nor are generic value summaries or explicit application projections automatically private. No production bypass or assumption about harmless local data is needed to raise verbosity without restoring excluded automatic fields.
+
 ## Context is an ergonomic layer, not authority
 
 Passing `requestId` and operation metadata through every helper is explicit but noisy.
