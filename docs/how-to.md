@@ -225,6 +225,57 @@ logger.info(
 
 Prefer an allow-list policy for recurring records. Do not treat the default redaction backstop as permission to log arbitrary payloads.
 
+## Migrate and review Object Summary Policies (breaking change)
+
+1. Define application policies with `defineLogObjectSummaryPolicy` at module initialization or configuration startup, before handling requests. Pass existing policy objects through the helper too; direct literals passed only to `summarizeObjectForLog` are not validated. Keep definitions unchanged after validation.
+2. Resolve definition errors before enabling logging. Supply a nonblank `kind`, valid field maps, nonempty source paths/segments, and one of the documented transforms. Replace previously accepted identity/`tokenPreview` selections of recognized secret paths with omission, `redact`, or justified `omittedShape` metadata. Renaming the output alias does not bypass source-path validation:
+
+   ```ts
+   const credentialPresencePolicy = defineLogObjectSummaryPolicy({
+     kind: "requestCredentialPresence",
+     fields: {
+       credential: { path: "headers.Authorization", transform: "redact" },
+     },
+   });
+   ```
+
+3. Add optional `review` metadata when documenting a policy's purpose and identifier decision. For an operational-only projection, explicitly exclude identifiers:
+
+   ```ts
+   const retryPolicy = defineLogObjectSummaryPolicy({
+     kind: "deployment",
+     fields: { state: "state", attempt: "attempt" },
+     review: {
+       purpose: "Diagnose deployment retries",
+       indirectIdentifiers: { treatment: "excluded" },
+     },
+   });
+   logger.info(summarizeObjectForLog(deployment, retryPolicy), "deployment retry");
+   ```
+
+   Only `kind`, `state`, and `attempt` are selected. The input's identifiers, customer content, and policy metadata are not implicitly collected.
+4. If a concrete troubleshooting need requires an indirect identifier, select it explicitly and document retention justification:
+
+   ```ts
+   const correlationPolicy = defineLogObjectSummaryPolicy({
+     kind: "deployment",
+     fields: { state: "state", deploymentId: "id" },
+     review: {
+       purpose: "Correlate failed deployment attempts",
+       indirectIdentifiers: {
+         treatment: "retained",
+         justification: "Deployment ID is needed to join retry records",
+       },
+     },
+   });
+   logger.info(
+     summarizeObjectForLog(deployment, correlationPolicy),
+     "deployment retry correlation",
+   );
+   ```
+
+5. Review actual value sources, optional labels, access, and retention separately. `excluded` is a review assertion, not an automatic classifier or deletion rule. `retained` does not select any field by itself or authorize unrelated fields, labels, or content. Purpose annotations are not legal approval, consent, or anonymization, and cannot enforce downstream retention. Existing safe policies may omit `review`; built-in summary fields, bounds, and explicit label enablement are unchanged. See the [validation contract and limits](reference.md#definelogobjectsummarypolicypolicy).
+
 ## Capture third-party console output temporarily
 
 Install capture around a dependency or migration path:

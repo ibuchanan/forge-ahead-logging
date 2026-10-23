@@ -398,6 +398,12 @@ export interface LogObjectSummaryPolicy {
   kind: string;
   fields: LogFieldMap;
   labels?: LogFieldMap;
+  review?: {
+    purpose: string;
+    indirectIdentifiers:
+      | { treatment: "excluded" }
+      | { treatment: "retained"; justification: string };
+  };
 }
 
 /** Options for explicit application projections; verbosity never authorizes labels. */
@@ -406,9 +412,91 @@ export interface LogObjectSummaryOptions extends LogValueSummaryOptions {
   includeLabels?: boolean;
 }
 
+function isPolicyRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function isValidFieldSelection(selection: unknown): boolean {
+  const path = isPolicyRecord(selection) ? selection.path : selection;
+  const transform = isPolicyRecord(selection) ? selection.transform : undefined;
+  const segments = typeof path === "string" ? path.split(".") : path;
+  return (
+    Array.isArray(segments) &&
+    segments.length > 0 &&
+    Array.from(segments).every(
+      (segment) => typeof segment === "string" && segment.trim() !== "",
+    ) &&
+    (transform === undefined ||
+      transform === "identity" ||
+      transform === "redact" ||
+      transform === "omittedShape" ||
+      transform === "tokenPreview")
+  );
+}
+
 export function defineLogObjectSummaryPolicy(
   policy: LogObjectSummaryPolicy,
 ): LogObjectSummaryPolicy {
+  if (!isPolicyRecord(policy)) {
+    throw new TypeError("policy must be an object");
+  }
+  if (typeof policy.kind !== "string" || policy.kind.trim() === "") {
+    throw new TypeError("kind must be a nonblank string");
+  }
+  if (policy.review !== undefined && !isPolicyRecord(policy.review)) {
+    throw new TypeError("review must be an object");
+  }
+  if (
+    policy.review !== undefined &&
+    (typeof policy.review.purpose !== "string" ||
+      policy.review.purpose.trim() === "")
+  ) {
+    throw new TypeError("review.purpose must be a nonblank string");
+  }
+  if (policy.review !== undefined) {
+    const decision = policy.review.indirectIdentifiers;
+    if (
+      decision?.treatment !== "excluded" &&
+      decision?.treatment !== "retained"
+    ) {
+      throw new TypeError(
+        "review.indirectIdentifiers.treatment must be excluded or retained",
+      );
+    }
+    if (
+      decision.treatment === "retained" &&
+      (typeof decision.justification !== "string" ||
+        decision.justification.trim() === "")
+    ) {
+      throw new TypeError(
+        "review.indirectIdentifiers.justification must be a nonblank string when retained",
+      );
+    }
+  }
+  for (const map of ["fields", "labels"] as const) {
+    const fields = policy[map];
+    if (map === "labels" && fields === undefined) continue;
+    if (!isPolicyRecord(fields)) {
+      throw new TypeError(`${map} must be a field map`);
+    }
+    for (const [alias, selection] of Object.entries(fields)) {
+      if (!isValidFieldSelection(selection)) {
+        throw new TypeError(
+          `${map}.${alias} must select a nonempty path and a supported transform (identity, redact, omittedShape, tokenPreview)`,
+        );
+      }
+      const { path, transform } = selectionPathAndTransform(selection);
+      if (
+        pathSegments(path).some((segment) => isSecretShapedKey(segment, [])) &&
+        transform !== "redact" &&
+        transform !== "omittedShape"
+      ) {
+        throw new TypeError(
+          `${map}.${alias} selects secret-shaped source path ${JSON.stringify(path)}; use redact or omittedShape, or remove the selection`,
+        );
+      }
+    }
+  }
   return policy;
 }
 

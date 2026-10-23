@@ -102,7 +102,28 @@ Traversal creates fresh objects/arrays and does not modify caller-owned values, 
 
 ### `defineLogObjectSummaryPolicy(policy)`
 
-Defines a reusable allow-list projection for a domain object. Policies select known fields and may use built-in transforms.
+Validates a reusable allow-list projection for a domain object at definition time and returns the same policy object. Define policies at module initialization or configuration startup, before business operations. Invalid definitions throw `TypeError` with the offending metadata property or field-map alias and a correction. No payload values are inspected during definition.
+
+`LogObjectSummaryPolicy` contains:
+
+| Property | Contract |
+| --- | --- |
+| `kind` | Nonblank string identifying the summary category. |
+| `fields` | Required field map of output aliases to source paths/selections; an empty map is valid. |
+| `labels` | Optional field map, validated even when labels are disabled. |
+| `review` | Optional definition-only metadata; existing safe policies need not supply it. |
+| `review.purpose` | Nonblank string describing the troubleshooting need. |
+| `review.indirectIdentifiers` | `{ treatment: "excluded" }` or `{ treatment: "retained", justification: string }`, with a nonblank justification for retention. Required when `review` is present. |
+
+A selection is a dot-separated string path, a nonempty array of literal string segments, or `{ path, transform? }`. Segments must be nonblank; empty paths/segments and unknown transforms are rejected. Omitted/`undefined` transforms mean `identity`. Maps and metadata must be non-null, non-array objects. Validation does not trim or rewrite definitions.
+
+**Source-path validation:** any path segment matching the case-insensitive [recognized secret-shaped keys](#default-redaction-backstop) may use only `redact` or `omittedShape`; implicit/explicit `identity` and `tokenPreview` are rejected. Both `fields` and `labels` are checked, including aliases, array paths, and paths descending through a recognized secret key. Diagnostics identify the source path, not just the output alias. A purpose or retention justification does not override this rule.
+
+**Review boundary:** metadata documents an application decision, not automatic classification. Validation checks shape, nonblank explanations, supported transforms, and recognized source names only. It cannot determine whether arbitrary strings/custom domain fields contain personal data or credentials, whether `excluded` is truthful, or whether a justification is sufficient. Generic `id`/`name` fields are neither automatically forbidden nor declared safe. Selecting a parent object with `identity` still permits its ordinary nested values within the existing bounds and key-based redaction.
+
+`review` is never automatically included in summary output or log records, never selects additional fields, and never enables labels. Purpose annotations are not legal approval, user consent, anonymization, or enforcement of downstream retention. Access, necessity, and retention remain application responsibilities.
+
+**Compatibility:** `review` is optional, safe existing policies and built-in defaults retain their output, and the helper still returns the original object. Previously accepted unsafe or malformed definitions now fail at definition time; see [migration](how-to.md#migrate-and-review-object-summary-policies-breaking-change). `summarizeObjectForLog` and its consumers do not revalidate policies during business operations. Direct object literals bypass definition-time validation, and later mutation invalidates its assurance; validate through this helper at startup and treat definitions as immutable application configuration.
 
 ### `summarizeObjectForLog(value, policy, options?)`
 
@@ -119,7 +140,7 @@ Projects and summarizes an object according to a `LogObjectSummaryPolicy`. `fiel
 | `omittedShape` | `{ omitted: true }`, plus `length` for strings, `items` for arrays, or `keys` for objects; no field names or values are copied. |
 | `tokenPreview` (deprecated for authorization data) | Compatibility only: the first three and last three characters of a string, separated by `...`; non-strings become `[redacted]`. Short strings can expose the entire value. A preview is not safe authorization-data logging. |
 
-`tokenPreview` remains accepted by caller-supplied policies for compatibility but is not used by the built-in Forge event policy. Authorization data must be omitted or fully redacted. There is no `preview` transform.
+`tokenPreview` remains accepted for non-secret source paths for compatibility but is not used by the built-in Forge event policy. Definition-time validation rejects it on recognized secret source paths even under a harmless output alias. Omit authorization data, fully redact it, or select only `omittedShape` presence/size metadata where needed. There is no `preview` transform.
 
 ## Forge event logging
 
