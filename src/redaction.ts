@@ -79,6 +79,11 @@ export function isSecretShapedKey(
   );
 }
 
+interface RedactionBudget {
+  entries: number;
+  characters: number;
+}
+
 const MAX_REDACTION_DEPTH = 32;
 const MAX_REDACTION_ENTRIES = 10_000;
 const MAX_REDACTION_CHARACTERS = 1_000_000;
@@ -115,10 +120,7 @@ export function redactLogRecord(
   }
 }
 
-function redactPrimitive(
-  value: unknown,
-  budget: { entries: number; characters: number },
-): unknown {
+function redactPrimitive(value: unknown, budget: RedactionBudget): unknown {
   if (typeof value === "string") {
     budget.characters -= value.length;
     if (budget.characters < 0) throw REDACTION_LIMIT;
@@ -136,30 +138,35 @@ function isBoxedPrimitive(
   );
 }
 
+// `key` is the property name `toJSON` receives; undefined means toJSON does not
+// apply, as for the merged root and for values that toJSON or valueOf produced.
 function redactRecordValue(
   value: unknown,
-  budget: { entries: number; characters: number },
+  budget: RedactionBudget,
   seen = new Set<object>(),
   depth = 0,
-  key = "",
-  applyToJSON = false,
+  key?: string,
 ): unknown {
   if (value === null || typeof value !== "object")
     return redactPrimitive(value, budget);
   if (seen.has(value)) return "[Circular]";
   if (depth >= MAX_REDACTION_DEPTH) throw REDACTION_LIMIT;
-  if (applyToJSON && "toJSON" in value && typeof value.toJSON === "function") {
-    return redactRecordValue(value.toJSON(key), budget, seen, depth + 1, key);
+  if (
+    key !== undefined &&
+    "toJSON" in value &&
+    typeof value.toJSON === "function"
+  ) {
+    return redactRecordValue(value.toJSON(key), budget, seen, depth + 1);
   }
   if (isBoxedPrimitive(value)) {
-    return redactRecordValue(value.valueOf(), budget, seen, depth, key);
+    return redactRecordValue(value.valueOf(), budget, seen, depth);
   }
   return redactContainer(value, budget, seen, depth);
 }
 
 function redactContainer(
   value: object,
-  budget: { entries: number; characters: number },
+  budget: RedactionBudget,
   seen: Set<object>,
   depth: number,
 ): unknown {
@@ -173,20 +180,20 @@ function redactContainer(
 
 function redactArray(
   arr: unknown[],
-  budget: { entries: number; characters: number },
+  budget: RedactionBudget,
   seen: Set<object>,
   depth: number,
 ): unknown[] {
   budget.entries -= arr.length;
   if (budget.entries < 0) throw REDACTION_LIMIT;
   return Array.from({ length: arr.length }, (_, index) =>
-    redactRecordValue(arr[index], budget, seen, depth + 1, String(index), true),
+    redactRecordValue(arr[index], budget, seen, depth + 1, String(index)),
   );
 }
 
 function redactObject(
   obj: Record<string, unknown>,
-  budget: { entries: number; characters: number },
+  budget: RedactionBudget,
   seen: Set<object>,
   depth: number,
 ): Record<string, unknown> {
@@ -198,7 +205,7 @@ function redactObject(
     if (budget.characters < 0) throw REDACTION_LIMIT;
     const entry = isSecretShapedKey(key, [])
       ? DEFAULT_REDACTION_CENSOR
-      : redactRecordValue(obj[key], budget, seen, depth + 1, key, true);
+      : redactRecordValue(obj[key], budget, seen, depth + 1, key);
     Object.defineProperty(result, key, {
       value: entry,
       enumerable: true,
