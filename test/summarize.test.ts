@@ -213,6 +213,48 @@ describe("summarizeForLog", () => {
     expect(result).toEqual({ Password: "[redacted]", ok: "fine" });
   });
 
+  it("never invokes getters, whether retained, omitted, or secret-shaped", () => {
+    fc.assert(
+      fc.property(
+        fc.array(fc.constantFrom("plain", "accessor", "secret"), {
+          maxLength: 8,
+        }),
+        fc.nat({ max: 9 }),
+        (kinds, maxObjectKeys) => {
+          let reads = 0;
+          const input: Record<string, unknown> = {};
+          for (const [index, kind] of kinds.entries()) {
+            const key =
+              kind === "secret"
+                ? (secretKeys[index] ?? "secret")
+                : `field${index}`;
+            if (kind === "plain") {
+              input[key] = index;
+            } else {
+              Object.defineProperty(input, key, {
+                enumerable: true,
+                get() {
+                  reads += 1;
+                  throw new Error("getter ran");
+                },
+              });
+            }
+          }
+          expect(() => summarizeForLog(input, { maxObjectKeys })).not.toThrow();
+          expect(reads).toBe(0);
+        },
+      ),
+    );
+  });
+
+  it("marks an accessor that falls within the key budget", () => {
+    const input = Object.defineProperty({}, "lazy", {
+      enumerable: true,
+      get: () => "value",
+    });
+    expect(summarizeForLog(input)).toEqual({ lazy: "[accessor]" });
+  });
+
   it("redacts every contract secret key at any casing", () => {
     fc.assert(
       fc.property(secretKey, (key) => {

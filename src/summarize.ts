@@ -165,20 +165,35 @@ function summarizeArray(
   return items;
 }
 
+// Reads the property descriptor, never the property, so getters are not invoked.
+function summarizeProperty(
+  owner: Record<string, unknown>,
+  key: string,
+  options: Required<LogValueSummaryOptions>,
+  depth: number,
+  seen: ReadonlySet<unknown>,
+): JSONValue {
+  if (isSecretShapedKey(key, options.redactedKeys)) {
+    return DEFAULT_REDACTION_CENSOR;
+  }
+  const descriptor = Object.getOwnPropertyDescriptor(owner, key);
+  return descriptor && "value" in descriptor
+    ? summarizeValue(descriptor.value, options, depth + 1, seen)
+    : "[accessor]";
+}
+
 function summarizeObject(
   value: Record<string, unknown>,
   options: Required<LogValueSummaryOptions>,
   depth: number,
   seen: ReadonlySet<unknown>,
 ): { [key: string]: JSONValue } {
-  const entries = Object.entries(value);
+  const keys = Object.keys(value);
   const summary: { [key: string]: JSONValue } = {};
-  for (const [key, entryValue] of entries.slice(0, options.maxObjectKeys)) {
-    summary[key] = isSecretShapedKey(key, options.redactedKeys)
-      ? DEFAULT_REDACTION_CENSOR
-      : summarizeValue(entryValue, options, depth + 1, seen);
+  for (const key of keys.slice(0, options.maxObjectKeys)) {
+    summary[key] = summarizeProperty(value, key, options, depth, seen);
   }
-  const omittedCount = entries.length - options.maxObjectKeys;
+  const omittedCount = keys.length - options.maxObjectKeys;
   if (omittedCount > 0) {
     summary[`[${omittedCount} more keys omitted]`] = true;
   }
