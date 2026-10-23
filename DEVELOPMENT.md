@@ -52,14 +52,14 @@ Run the narrower commands while iterating when they provide faster feedback.
 
 ### Property-based privacy tests
 
-Use `fast-check` inside ordinary Vitest tests to express invariants over generated data. The redaction and Object Summary Policy tests cover mixed-case secret keys, nested object/array paths, and the rule that unselected data cannot widen a summary. Keep named examples for exact output contracts, resource limits, getters, cycles, and `toJSON` behavior.
+Use `fast-check` inside ordinary Vitest tests to express invariants over generated data. The redaction and Object Summary Policy tests cover mixed-case secret keys, nested object/array paths, and the rule that unselected data cannot widen a summary. The summary tests vary string, array, object-key, and depth limits, checking preserved content, omission accounting, zero limits, and exact boundaries. Keep named examples for exact output contracts, resource limits, getters, cycles, and `toJSON` behavior.
 
 - Reuse `test/privacy-arbitraries.ts` for the independent secret-key vocabulary. Do not derive expected protections from implementation constants.
 - Bound generators so normal runs stay fast. Each property uses the default 100 cases; required regression cases can be supplied with `examples`.
 - To reproduce a failure, copy the reported `seed` and `path` into that property's `fc.assert` options, then rerun its test file. Leave shrinking enabled while investigating; retain the minimized counterexample as a regression example. To explore more inputs locally, temporarily increase `numRuns` on the property rather than pinning one seed permanently.
 
 ```sh
-bun run test test/redaction.test.ts test/object-summary-policy.test.ts
+bun run test test/redaction.test.ts test/object-summary-policy.test.ts test/summarize.test.ts
 ```
 
 ## Project layout

@@ -1,5 +1,10 @@
+import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { DEFAULT_REDACT_PATHS, summarizeForLog } from "../src/index";
+import {
+  DEFAULT_REDACT_PATHS,
+  type JSONValue,
+  summarizeForLog,
+} from "../src/index";
 
 describe("summarizeForLog", () => {
   it("passes through JSON-safe primitives unchanged", () => {
@@ -37,6 +42,157 @@ describe("summarizeForLog", () => {
     }
     expected["[3 more keys omitted]"] = true;
     expect(result).toEqual(expected);
+  });
+
+  it("preserves string prefixes and accounts for every omitted UTF-16 code unit", () => {
+    fc.assert(
+      fc.property(
+        fc.string({ maxLength: 300, unit: "binary" }),
+        fc.nat({ max: 320 }),
+        (value, maxStringLength) => {
+          const result = summarizeForLog(value, { maxStringLength }) as string;
+          if (value.length <= maxStringLength) {
+            expect(result).toBe(value);
+          } else {
+            expect(result.slice(0, maxStringLength)).toBe(
+              value.slice(0, maxStringLength),
+            );
+            const marker = result
+              .slice(maxStringLength)
+              .match(/^\.\.\.\[(\d+) chars omitted\]$/);
+            expect(marker).not.toBeNull();
+            expect(maxStringLength + Number(marker?.[1])).toBe(value.length);
+          }
+        },
+      ),
+      {
+        examples: [
+          ["", 0],
+          ["abc", 0],
+          ["abc", 2],
+          ["abc", 3],
+          ["abc", 4],
+          ["😀x", 1],
+        ],
+      },
+    );
+  });
+
+  it("retains the array prefix and accounts for every omitted item at any item limit", () => {
+    fc.assert(
+      fc.property(
+        fc.array(fc.integer(), { maxLength: 40 }),
+        fc.nat({ max: 45 }),
+        (value, maxArrayItems) => {
+          const input = Object.freeze(value);
+          const result = summarizeForLog(input, {
+            maxArrayItems,
+          }) as JSONValue[];
+          const retained = Math.min(value.length, maxArrayItems);
+          expect(result.slice(0, retained)).toEqual(value.slice(0, retained));
+          if (value.length <= maxArrayItems) {
+            expect(result).toEqual(value);
+          } else {
+            expect(result).toHaveLength(maxArrayItems + 1);
+            expect(result.at(-1)).toBe(
+              `[${value.length - retained} more items omitted]`,
+            );
+          }
+        },
+      ),
+      {
+        examples: [
+          [[], 0],
+          [[1], 0],
+          [[1, 2], 1],
+          [[1, 2], 2],
+          [[1, 2], 3],
+        ],
+      },
+    );
+  });
+
+  it("retains object entry order and accounts for every omitted key at any key limit", () => {
+    fc.assert(
+      fc.property(
+        fc.array(fc.integer(), { maxLength: 40 }),
+        fc.nat({ max: 45 }),
+        (values, maxObjectKeys) => {
+          const entries = values.map(
+            (value, index) => [`field${index}`, value] as const,
+          );
+          const input = Object.freeze(Object.fromEntries(entries));
+          const result = summarizeForLog(input, { maxObjectKeys }) as Record<
+            string,
+            JSONValue
+          >;
+          const retained = Math.min(entries.length, maxObjectKeys);
+          expect(Object.entries(result).slice(0, retained)).toEqual(
+            entries.slice(0, retained),
+          );
+          if (entries.length <= maxObjectKeys) {
+            expect(result).toEqual(input);
+          } else {
+            expect(Object.keys(result)).toHaveLength(maxObjectKeys + 1);
+            expect(
+              result[`[${entries.length - retained} more keys omitted]`],
+            ).toBe(true);
+          }
+        },
+      ),
+      {
+        examples: [
+          [[], 0],
+          [[1], 0],
+          [[1, 2], 1],
+          [[1, 2], 2],
+          [[1, 2], 3],
+        ],
+      },
+    );
+  });
+
+  it("stops mixed object/array paths exactly at maxDepth without truncating scalar leaves", () => {
+    fc.assert(
+      fc.property(
+        fc.array(fc.boolean(), { maxLength: 24 }),
+        fc.nat({ max: 26 }),
+        fc.boolean(),
+        (arrays, maxDepth, scalar) => {
+          let input: JSONValue = scalar ? 7 : Object.freeze({ value: 7 });
+          for (const array of [...arrays].reverse()) {
+            input = Object.freeze(
+              array ? [input] : { next: input },
+            ) as JSONValue;
+          }
+          let result = summarizeForLog(input, { maxDepth });
+          const visited = Math.min(arrays.length, maxDepth);
+          for (const array of arrays.slice(0, visited)) {
+            expect(Array.isArray(result)).toBe(array);
+            result = array
+              ? (result as JSONValue[])[0]
+              : (result as Record<string, JSONValue>).next;
+          }
+          expect(result).toEqual(
+            maxDepth < arrays.length || (maxDepth === arrays.length && !scalar)
+              ? "[max depth reached]"
+              : scalar
+                ? 7
+                : { value: 7 },
+          );
+        },
+      ),
+      {
+        examples: [
+          [[], 0, false],
+          [[], 0, true],
+          [[true, false], 1, false],
+          [[false, true], 2, false],
+          [[true, false], 2, true],
+          [[false, true], 3, false],
+        ],
+      },
+    );
   });
 
   it("replaces circular references with a marker", () => {
