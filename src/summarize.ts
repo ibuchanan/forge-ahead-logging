@@ -72,16 +72,27 @@ function summarizeShapeValues(
   });
 }
 
+/**
+ * The type and size of a value without its contents or any child shapes: the
+ * head shared by every structural node and by the `omittedShape` transform.
+ */
+export function describeShape(value: unknown): Record<string, string | number> {
+  if (value === null) return { type: "null" };
+  if (typeof value === "string")
+    return { type: "string", length: value.length };
+  if (typeof value !== "object") return { type: typeof value };
+  return Array.isArray(value)
+    ? { type: "array", items: value.length }
+    : { type: "object", keys: Object.keys(value).length };
+}
+
 function summarizeShape(
   value: unknown,
   options: Required<LogValueSummaryOptions>,
   depth: number,
   seen: ReadonlySet<unknown>,
 ): JSONValue {
-  if (value === null) return { type: "null" };
-  if (typeof value === "string")
-    return { type: "string", length: value.length };
-  if (typeof value !== "object") return { type: typeof value };
+  if (value === null || typeof value !== "object") return describeShape(value);
   const type = Array.isArray(value) ? "array" : "object";
   if (depth >= options.maxDepth) return { type, omitted: "max depth" };
   if (seen.has(value)) return { type, omitted: "circular" };

@@ -35,8 +35,8 @@ const expectedSummary = {
   eventType: "avi:jira:created:issue",
   method: "POST",
   requestId: "req-1",
-  headers: { omitted: true, keys: 1 },
-  body: { omitted: true, length: 21 },
+  headers: { type: "object", keys: 1 },
+  body: { type: "string", length: 21 },
 };
 
 function expectMinimized(value: unknown): void {

@@ -14,8 +14,8 @@ describe("summarizeForgeInvocation", () => {
 
     expect(result).toEqual({
       kind: "forgeEvent",
-      headers: { omitted: true, keys: 2 },
-      body: { omitted: true, length: 20 },
+      headers: { type: "object", keys: 2 },
+      body: { type: "string", length: 20 },
     });
   });
 

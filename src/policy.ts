@@ -1,5 +1,6 @@
 import { DEFAULT_REDACTION_CENSOR, isSecretShapedKey } from "./redaction.js";
 import {
+  describeShape,
   type JSONValue,
   type LogValueSummaryOptions,
   summarizeForLog,
@@ -183,19 +184,6 @@ function selectionPathAndTransform(selection: LogFieldSelection): {
   return { path: selection, transform: "identity" };
 }
 
-function omittedShapeOf(value: unknown): JSONValue {
-  if (typeof value === "string") {
-    return { omitted: true, length: value.length };
-  }
-  if (Array.isArray(value)) {
-    return { omitted: true, items: value.length };
-  }
-  if (value !== null && typeof value === "object") {
-    return { omitted: true, keys: Object.keys(value).length };
-  }
-  return { omitted: true };
-}
-
 function applyFieldTransform(
   transform: LogFieldTransform,
   value: unknown,
@@ -205,7 +193,7 @@ function applyFieldTransform(
     case "redact":
       return DEFAULT_REDACTION_CENSOR;
     case "omittedShape":
-      return omittedShapeOf(value);
+      return describeShape(value);
     default:
       return summarizeForLog(value, options);
   }

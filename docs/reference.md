@@ -132,11 +132,11 @@ Projects and summarizes an object according to a `LogObjectSummaryPolicy`. `fiel
 
 `LogFieldTransform` supports these named, package-controlled transformations. Policies do not accept arbitrary callback functions.
 
-| Transform            | Output                                                                                                                          |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `identity` (default) | The selected value passed through the bounded value summarizer.                                                                 |
-| `redact`             | `[redacted]` for a present field.                                                                                               |
-| `omittedShape`       | `{ omitted: true }`, plus `length` for strings, `items` for arrays, or `keys` for objects; no field names or values are copied. |
+| Transform            | Output                                                                                          |
+| -------------------- | ----------------------------------------------------------------------------------------------- |
+| `identity` (default) | The selected value passed through the bounded value summarizer.                                 |
+| `redact`             | `[redacted]` for a present field.                                                               |
+| `omittedShape`       | Type and size only, in the [structural format](#structural-diagnostics); no children or values. |
 
 ## Forge event logging
 

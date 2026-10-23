@@ -79,8 +79,8 @@ it.each(
     expect(summarizeForgeInvocation(event)).toEqual({
       kind: "forgeEvent",
       method: "POST",
-      headers: { omitted: true, keys: 1 },
-      body: { omitted: true, length: privateText.length },
+      headers: { type: "object", keys: 1 },
+      body: { type: "string", length: privateText.length },
     });
     const invocationOptions = eventShapeOptions(includeEventShape);
     logForgeInvocation(logger, event, "received", invocationOptions);

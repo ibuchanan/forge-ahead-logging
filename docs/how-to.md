@@ -276,6 +276,21 @@ Prefer an allow-list policy for recurring records. Do not treat the default reda
 
 5. Review actual value sources, optional labels, access, and retention separately. `excluded` is a review assertion, not an automatic classifier or deletion rule. `retained` does not select any field by itself or authorize unrelated fields, labels, or content. Purpose annotations are not legal approval, consent, or anonymization, and cannot enforce downstream retention. Existing safe policies may omit `review`; built-in summary fields, bounds, and explicit label enablement are unchanged. See the [validation contract and limits](reference.md#definelogobjectsummarypolicypolicy).
 
+## Migrate `omittedShape` output (breaking change)
+
+The `omittedShape` transform now reports the same shape format as
+[structural diagnostics](reference.md#structural-diagnostics) instead of its
+own `omitted: true` format. This includes the `headers` and `body` fields of
+the built-in Forge event summary. Update log queries and parsers that read
+these fields:
+
+| Value  | Before                          | After                                               |
+| ------ | ------------------------------- | --------------------------------------------------- |
+| String | `{ omitted: true, length: 10 }` | `{ type: "string", length: 10 }`                    |
+| Array  | `{ omitted: true, items: 3 }`   | `{ type: "array", items: 3 }`                       |
+| Object | `{ omitted: true, keys: 2 }`    | `{ type: "object", keys: 2 }`                       |
+| Other  | `{ omitted: true }`             | `{ type: "number" }`, `{ type: "null" }`, and so on |
+
 ## Capture third-party console output temporarily
 
 Install capture around a dependency or migration path:

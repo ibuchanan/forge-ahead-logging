@@ -4,6 +4,7 @@ import {
   defineLogObjectSummaryPolicy,
   summarizeObjectForLog,
 } from "../src/index";
+import { summarizeShapeForLog } from "../src/summarize";
 import { createCapturingLogger } from "../src/testing";
 import { secretKey } from "./privacy-arbitraries";
 
@@ -228,7 +229,7 @@ describe("reviewed policy emission", () => {
         attempt: 2,
         ...(treatment === "retained" ? { deploymentId: "deployment-42" } : {}),
         credential: "[redacted]",
-        credentialShape: { omitted: true, length: 13 },
+        credentialShape: { type: "string", length: 13 },
       };
 
       expect(defineLogObjectSummaryPolicy(policy)).toBe(policy);
@@ -402,9 +403,47 @@ describe("summarizeObjectForLog field transforms", () => {
       policy,
     );
 
-    expect(result["body"]).toEqual({ omitted: true, length: 10 });
-    expect(result["headers"]).toEqual({ omitted: true, keys: 2 });
-    expect(result["tags"]).toEqual({ omitted: true, items: 3 });
+    expect(result["body"]).toEqual({ type: "string", length: 10 });
+    expect(result["headers"]).toEqual({ type: "object", keys: 2 });
+    expect(result["tags"]).toEqual({ type: "array", items: 3 });
+  });
+
+  it("reports scalar types the same way as structural diagnostics", () => {
+    const policy = defineLogObjectSummaryPolicy({
+      kind: "widget",
+      fields: { value: { path: "value", transform: "omittedShape" } },
+    });
+
+    const shapes = [null, 7, true, undefined, 5n, Symbol("s"), () => 1].map(
+      (value) => summarizeObjectForLog({ value }, policy)["value"],
+    );
+
+    expect(shapes).toEqual([
+      { type: "null" },
+      { type: "number" },
+      { type: "boolean" },
+      { type: "undefined" },
+      { type: "bigint" },
+      { type: "symbol" },
+      { type: "function" },
+    ]);
+  });
+
+  it("is the childless head of the structural shape for any value", () => {
+    const policy = defineLogObjectSummaryPolicy({
+      kind: "widget",
+      fields: { value: { path: "value", transform: "omittedShape" } },
+    });
+
+    fc.assert(
+      fc.property(fc.jsonValue({ maxDepth: 3 }), (value) => {
+        const { values, omitted, ...head } = summarizeShapeForLog(value, {
+          maxDepth: 1,
+        }) as Record<string, unknown>;
+
+        expect(summarizeObjectForLog({ value }, policy)["value"]).toEqual(head);
+      }),
+    );
   });
 
   it("passes identity-transformed values through summarizeForLog's budgets", () => {
