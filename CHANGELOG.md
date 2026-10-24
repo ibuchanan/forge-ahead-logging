@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here.
 
+## [0.6.0] - 2026-10-24
+
+### 🚀 Features
+
+- _(logging)_ Add Result-based W3C trace context helpers
+
 ## [0.5.0] - 2026-10-23
 
 ### 🚀 Features
@@ -62,6 +68,7 @@ All notable changes to this project are documented here.
 - Expand development ignore rules
 - _(tooling)_ Align with forge-ranch standards
 - _(tooling)_ Install lint and pack tools as devDependencies
+- _(release)_ V0.5.0
 
 ## [0.4.1] - 2026-08-23
 
