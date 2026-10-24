@@ -43,6 +43,72 @@ const context = getLogContext();
 
 Keep context values small and non-sensitive. Ambient context is a convenience for log enrichment, not an authorization mechanism.
 
+## Correlate logs across service boundaries
+
+At a backend request boundary, parse the incoming `traceparent` value and create
+a local child context. All three helpers return `Result` values from
+`@forge-ahead/errors`. Explicitly restart after a missing or malformed header,
+and handle generation or formatting failures without `try`/`catch`. Bind only
+the resulting identifiers, not raw request headers, to the log scope:
+
+```ts
+import { ok } from "@forge-ahead/errors";
+import {
+  createTraceContext,
+  formatTraceparent,
+  log,
+  parseTraceparent,
+  withLogContext,
+} from "@forge-ahead/logging";
+
+export async function handleRequest(request: Request, downstreamUrl: string) {
+  const parsed = parseTraceparent(request.headers.get("traceparent"));
+  const created = parsed.match(
+    (parent) => createTraceContext({ parent }),
+    () => createTraceContext(),
+  );
+  if (created.isErr()) return created;
+  const context = created.value;
+  const formatted = formatTraceparent(context);
+  if (formatted.isErr()) return formatted;
+
+  return withLogContext({ ...context }, async () => {
+    log.info({}, "request started");
+    const response = await fetch(downstreamUrl, {
+      headers: { traceparent: formatted.value },
+    });
+    log.info({ status: response.status }, "downstream request completed");
+    return ok(response);
+  });
+}
+```
+
+For Forge event envelopes, pass the header value exposed by that transport to
+`parseTraceparent`; the helper does not inspect events or headers automatically.
+HTTP header names are case-insensitive; use a case-insensitive lookup when your
+transport exposes plain header records rather than `Headers`.
+
+To give an outgoing operation its own span ID, create a child with
+`createTraceContext({ parent: context })`, handle its `Result`, bind that child
+around the operation, and propagate the successful `formatTraceparent(child)`
+value. The receiving service repeats the parse-and-create-child step. Do not
+log local work under the caller's span ID.
+
+To reject malformed input instead of restarting, compose the helpers with
+`parseTraceparent(value).andThen((parent) => createTraceContext({ parent }))`.
+Append `.andThen(formatTraceparent)` when only the outgoing header is needed.
+Pass failures to `log.result(result)` when an error log is appropriate.
+
+Roots are unsampled unless `sampled: true` is supplied; children inherit the
+sampled bit. Only set that bit when trace data may actually be recorded. These
+helpers do not record spans and do not change log-level filtering. If an
+OpenTelemetry SDK already owns the active span, pass its span context to
+`formatTraceparent` and bind its IDs rather than generating an unrelated span.
+
+Manage vendor `tracestate` separately if required by your tracing system. Do
+not forward it after an invalid `traceparent` causes a trace restart. Treat
+incoming IDs as correlation data only, never as authentication or authorization.
+
 ## Log Forge invocation lifecycle events
 
 For a single event object, use `logForgeInvocation`:

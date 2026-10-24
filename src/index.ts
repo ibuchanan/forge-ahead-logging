@@ -56,4 +56,11 @@ export {
   type LogValueSummaryOptions,
   summarizeForLog,
 } from "./summarize.js";
+export {
+  createTraceContext,
+  formatTraceparent,
+  parseTraceparent,
+  type TraceContext,
+  type TraceContextOptions,
+} from "./trace.js";
 export type { LogMethod, MinimalLogger } from "./types.js";

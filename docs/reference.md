@@ -71,6 +71,83 @@ Returns the current ambient context. Outside a context scope, it returns an empt
 
 Context is for enrichment only. It is not a substitute for validating identity, permissions, or request authenticity.
 
+## W3C Trace Context
+
+The root entry point exports `TraceContext`, `TraceContextOptions`,
+`parseTraceparent`, `formatTraceparent`, and `createTraceContext`. These helpers
+provide identifiers for distributed log correlation and W3C `traceparent`
+propagation. They do not record spans, install an OpenTelemetry context manager,
+or export telemetry. Vendor `tracestate` and baggage are not managed.
+
+### `TraceContext`
+
+| Field          | Type      | Meaning                                                    |
+| -------------- | --------- | ---------------------------------------------------------- |
+| `traceId`      | `string`  | Nonzero 32-character lowercase hexadecimal trace ID.       |
+| `spanId`       | `string`  | Nonzero 16-character lowercase hexadecimal span ID.        |
+| `traceFlags`   | `number`  | Integer from 0 through 255; bit 0 is the sampled decision. |
+| `parentSpanId` | `string?` | Local parent relationship, present on generated children.  |
+
+Fields are readonly in TypeScript. The required fields are structurally
+compatible with OpenTelemetry span contexts. `parentSpanId` is local metadata;
+the wire header's `parent-id` contains the sending context's **own** `spanId`.
+
+### `parseTraceparent(header)`
+
+Accepts `unknown` and returns `Result<TraceContext, ProblemDetails>` from
+`@forge-ahead/errors`. Missing, non-string, or invalid input returns `Err` with
+status `400` and detail `Invalid traceparent header`. Parsing does not generate
+IDs or create a local child span. The received wire `parent-id` becomes `spanId`.
+
+Validation rejects uppercase hexadecimal, zero IDs, invalid lengths, version
+`ff`, and extra fields in version `00`. Surrounding HTTP spaces and tabs are
+allowed; carriage returns and line feeds are rejected. Future versions `01`
+through `fe` use the known 55-character prefix; additional data must start with
+`-` and is discarded. Parsed flags retain all eight bits.
+
+### `formatTraceparent(context)`
+
+Returns `Result<string, ProblemDetails>` containing a version `00`
+`traceparent` value. The context's `spanId` is written as wire `parent-id`;
+`parentSpanId` is not serialized. Only the sampled bit is emitted; reserved
+flag bits and unknown future-version fields are discarded. Invalid trace IDs,
+span IDs, or flags return `Err` with status `400` and detail
+`Invalid trace context`, without including input values.
+
+### `createTraceContext(options?)`
+
+Returns `Result<TraceContext, ProblemDetails>`. `TraceContextOptions` has
+these fields:
+- `parent?: TraceContext`: retains its trace ID and records its span ID as
+  `parentSpanId`.
+- `sampled?: boolean`: overrides the sampled decision for the new span.
+
+Without a parent, the helper generates a new trace ID and span ID and defaults
+to unsampled. With a parent, it generates a new span ID and inherits the parent's
+sampled bit unless overridden. Unknown flag bits are cleared. Generation uses
+`node:crypto` and retries all-zero IDs. Parent contexts are validated without
+mutation. An invalid parent returns `Err` with status `400` and detail
+`Invalid trace context`. Cryptographic generation failures return `Err` with
+status `500` and detail `Unable to generate trace IDs`; the underlying exception
+is not included. An `undefined` parent starts a new trace. Restarting after a
+parse failure is an explicit caller decision, using `isErr`, `match`, or
+`orElse`; failures otherwise propagate through `andThen`.
+
+Context creation and parsing have no logging side effects. Context fields enter
+log records only through explicit bindings, such as
+`withLogContext({ ...context }, operation)` or `logger.child({ ...context })`.
+Sampling controls propagation metadata, not whether log records are emitted.
+Incoming identifiers are untrusted correlation data, not identity or permission
+claims.
+
+Behavior is based on the [W3C Trace Context specification][w3c-trace-context].
+The archived [Elastic traceparent helper][elastic-traceparent] informed the
+root/child workflow; the implementation uses TypeScript records and native
+cryptography rather than its buffer-backed class or Elastic-specific APIs.
+
+[w3c-trace-context]: https://www.w3.org/TR/trace-context/
+[elastic-traceparent]: https://github.com/elastic/node-traceparent/blob/master/index.js
+
 ## Value safety
 
 ### `summarizeForLog(value, options?)`
